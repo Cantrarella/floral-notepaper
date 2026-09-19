@@ -18,6 +18,22 @@
 
 对比度按 WCAG 标准计算，且以**实际生效的底色**为基准（原版逻辑用的是内置纸色，自定义底色后会失真，已修正）。
 
+## 出厂默认配色
+
+本 fork 预置了一套配色，**安装即用**（三项自定义开关默认开启，无需手动设置）：
+
+| 项目                | 浅色主题                                       | 深色主题  |
+| ------------------- | ---------------------------------------------- | --------- |
+| 主题色              | `#2f5d8a`                                      | `#759dce` |
+| 正文色              | `#1a1a18`                                      | `#e5e1da` |
+| 淡色（次级 / 图标） | `#6c6c64`                                      | `#928f87` |
+| 界面底色 面板       | `#ffffff`                                      | `#222120` |
+| 界面底色 暖底       | `#e8e8e8`                                      | `#2c2a27` |
+| 界面底色 深底       | `#dcd8d0`                                      | `#3c3935` |
+| 背景                | 无（保持干净，可在设置里选图片 / 渐变 / 纯色） | 同左      |
+
+这些值定义在 `src-tauri/src/services/notes.rs` 的 `default_*` 系列函数中。在设置里**关掉**对应开关会回退到上游内置配色（竹青 `#2d5a3d` 系）。
+
 ## 改动文件
 
 **新增**
@@ -32,6 +48,7 @@
 - `src/components/BackgroundLayer.tsx`、`SettingsPanel.tsx`、`src/App.tsx`、`index.html`
 - `src-tauri/src/services/notes.rs`、`src-tauri/src/desktop.rs` — Rust 侧 `AppConfig` 同步字段
 - `src-tauri/src/updater/check.rs` — 自动更新默认源指向本仓库
+- `src-tauri/src/services/notes.rs` — 出厂默认配色（见上表）
 - `src/locales/{zh-CN,zh-HK,en-US}/translation.json` — 三语言文案
 
 ## 自动更新

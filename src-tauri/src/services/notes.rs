@@ -186,15 +186,15 @@ impl Default for AppConfig {
             gradient_angle: default_gradient_angle(),
             gradient_stops: default_gradient_stops(),
             gradient_dim: default_gradient_dim(),
-            custom_accent_enabled: false,
+            custom_accent_enabled: true,
             accent_color_light: default_accent_color_light(),
             accent_color_dark: default_accent_color_dark(),
-            custom_text_color_enabled: false,
+            custom_text_color_enabled: true,
             text_color_light: default_text_color_light(),
             text_color_dark: default_text_color_dark(),
             text_faint_light: default_text_faint_light(),
             text_faint_dark: default_text_faint_dark(),
-            custom_surface_enabled: false,
+            custom_surface_enabled: true,
             surface_color_light: default_surface_color_light(),
             surface_color_dark: default_surface_color_dark(),
             surface_warm_light: default_surface_warm_light(),
@@ -1844,12 +1844,13 @@ fn default_gradient_dim() -> f64 {
     0.0
 }
 
+// 定制版：以下配色默认值是本 fork 预置的配色方案（非上游内置值）
 fn default_accent_color_light() -> String {
-    "#2d5a3d".into()
+    "#2f5d8a".into()
 }
 
 fn default_accent_color_dark() -> String {
-    "#4faa70".into()
+    "#759dce".into()
 }
 
 fn default_text_color_light() -> String {
@@ -1861,7 +1862,7 @@ fn default_text_color_dark() -> String {
 }
 
 fn default_text_faint_light() -> String {
-    "#8a8a80".into()
+    "#6c6c64".into()
 }
 
 fn default_text_faint_dark() -> String {
@@ -1869,7 +1870,7 @@ fn default_text_faint_dark() -> String {
 }
 
 fn default_surface_color_light() -> String {
-    "#f6f3ec".into()
+    "#ffffff".into()
 }
 
 fn default_surface_color_dark() -> String {
@@ -1877,7 +1878,7 @@ fn default_surface_color_dark() -> String {
 }
 
 fn default_surface_warm_light() -> String {
-    "#f0ebe0".into()
+    "#e8e8e8".into()
 }
 
 fn default_surface_warm_dark() -> String {
@@ -1885,7 +1886,7 @@ fn default_surface_warm_dark() -> String {
 }
 
 fn default_surface_deep_light() -> String {
-    "#e8e1d3".into()
+    "#dcd8d0".into()
 }
 
 fn default_surface_deep_dark() -> String {
