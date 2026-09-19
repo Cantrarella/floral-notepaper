@@ -30,7 +30,9 @@ import {
   normalizeTileColor,
   resolveTileColor,
 } from "../features/settings/tileColor";
-import type { TileColorMode } from "../features/settings/types";
+import type { AppConfig, TileColorMode } from "../features/settings/types";
+import { currentTheme } from "../features/settings/theme";
+import { resolveTileFollowPalette } from "../features/settings/appearance";
 import {
   shouldEnterPadFromTileOnDoubleClick,
   shouldReturnToTileAfterManualSave,
@@ -143,6 +145,9 @@ export function NotePad({
   const [tileColor, setTileColor] = useState(() =>
     resolveTileColor("system", normalizeTileColor(initialTileColor)),
   );
+  // 「磁贴跟随界面配色」要读完整配置（界面底色 / 文字色开关），这里留一份
+  const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
+  const [tileTheme, setTileTheme] = useState<"light" | "dark">(() => currentTheme());
   const [isExiting, setIsExiting] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
@@ -219,6 +224,7 @@ export function NotePad({
           setTileColor(
             resolveTileColor(loadedConfig.tileColorMode ?? "system", loadedConfig.tileColor),
           );
+          setAppConfig(loadedConfig);
         }
         if (initialNoteId) {
           const note = await getNote(initialNoteId);
@@ -276,6 +282,8 @@ export function NotePad({
       setTileColorMode(mode);
       setTileColorRaw(normalizeTileColor(raw));
       setTileColor(resolveTileColor(mode, raw));
+      // 设置面板改界面底色 / 文字色时，跟随配色的磁贴也要一起变
+      setAppConfig((previous) => (previous ? { ...previous, ...event.payload } : previous));
       if (event.payload.surfaceFontSize != null) setSurfaceFontSize(event.payload.surfaceFontSize);
       if (event.payload.tileRenderMarkdown != null)
         setTileRenderMarkdown(event.payload.tileRenderMarkdown);
@@ -290,16 +298,20 @@ export function NotePad({
   }, []);
 
   useEffect(() => {
-    if (tileColorMode !== "system") return;
+    // 主题一变（含跟随系统），跟随主题的磁贴底色与「跟随界面配色」都要重算，
+    // 所以这里无条件监听，内部再用 ref 取最新值判断，避免反复重订阅
     const observer = new MutationObserver(() => {
-      setTileColor(resolveTileColor("system", tileColorRaw));
+      setTileTheme(currentTheme());
+      if (tileColorModeRef.current === "system") {
+        setTileColor(resolveTileColor("system", tileColorRawRef.current));
+      }
     });
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["data-theme"],
     });
     return () => observer.disconnect();
-  }, [tileColorMode, tileColorRaw]);
+  }, []);
 
   useEffect(() => {
     let myLabel = "";
@@ -709,6 +721,13 @@ export function NotePad({
     setStatus("empty");
   };
 
+  // 磁贴配色跟随界面配色；用户显式选了「自定义」磁贴颜色时不跟随
+  const tileFollow = useMemo(
+    () => (appConfig ? resolveTileFollowPalette(appConfig, tileTheme) : null),
+    [appConfig, tileTheme],
+  );
+  const surfaceTileColor = tileFollow?.background ?? tileColor;
+
   const isTile = surfaceMode === "tile";
   const tileTitle = title.trim();
   const enterClass = hasEnteredOnce.current ? "" : "animate-window-enter";
@@ -722,7 +741,8 @@ export function NotePad({
         <Tile
           title={tileTitle || undefined}
           content={content}
-          color={tileColor}
+          color={surfaceTileColor}
+          ink={tileFollow?.ink ?? undefined}
           fontSize={surfaceFontSize}
           renderMarkdown={tileRenderMarkdown}
           imageBaseDir={imageBaseDir ?? undefined}

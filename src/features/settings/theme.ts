@@ -21,6 +21,12 @@ export function applyTheme(option: ThemeOption): void {
   }
 }
 
+/** 读当前实际生效的主题（applyTheme 把结果写在 <html data-theme> 上） */
+export function currentTheme(): "light" | "dark" {
+  if (typeof document === "undefined") return "light";
+  return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+}
+
 let systemListener: (() => void) | null = null;
 
 export function watchSystemTheme(option: ThemeOption): () => void {

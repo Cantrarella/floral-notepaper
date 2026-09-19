@@ -5,6 +5,13 @@ import { useTranslation } from "react-i18next";
 import { DEFAULT_TILE_COLOR, normalizeTileColor } from "../features/settings/tileColor";
 import { MarkdownPreviewLazy as MarkdownPreview } from "../features/markdown/MarkdownPreviewLazy";
 
+/** 外部指定的墨色三档；不传就按底色推导（上游原本的行为） */
+export interface TileInk {
+  title: string;
+  content: string;
+  empty: string;
+}
+
 export interface TileProps extends Omit<
   HTMLAttributes<HTMLDivElement>,
   "color" | "content" | "title"
@@ -12,6 +19,8 @@ export interface TileProps extends Omit<
   title?: string;
   content: string;
   color?: string;
+  /** 跟随界面配色时由调用方传入，覆盖按底色推导出来的墨色 */
+  ink?: TileInk;
   width?: number | string;
   rotation?: number;
   fontSize?: number;
@@ -72,6 +81,7 @@ export function Tile({
   title,
   content,
   color = DEFAULT_TILE_COLOR,
+  ink,
   width = 260,
   rotation = 0,
   fontSize = 14,
@@ -90,11 +100,12 @@ export function Tile({
     return {
       borderColor: chroma.mix(tileColor, mixTarget, 0.18).alpha(0.55).css(),
       cornerColor: chroma.mix(tileColor, mixTarget, 0.3).alpha(0.26).css(),
-      titleColor: chroma.mix(tileColor, mixTarget, 0.4).alpha(0.5).css(),
-      contentColor: chroma.mix(tileColor, mixTarget, 0.65).alpha(0.85).css(),
-      emptyColor: chroma.mix(tileColor, mixTarget, 0.25).alpha(0.4).css(),
+      // 调用方给了墨色（跟随界面配色）就用它，否则按底色推导
+      titleColor: ink?.title ?? chroma.mix(tileColor, mixTarget, 0.4).alpha(0.5).css(),
+      contentColor: ink?.content ?? chroma.mix(tileColor, mixTarget, 0.65).alpha(0.85).css(),
+      emptyColor: ink?.empty ?? chroma.mix(tileColor, mixTarget, 0.25).alpha(0.4).css(),
     };
-  }, [tileColor]);
+  }, [tileColor, ink]);
   const mergedStyle: CSSProperties = {
     width,
     backgroundColor: tileColor,

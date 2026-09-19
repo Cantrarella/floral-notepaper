@@ -218,6 +218,42 @@ export function resolveAppearanceVars(
   return { accent, text, surface, paper };
 }
 
+/** 磁贴跟随界面配色时用的调色板 */
+export interface TileFollowPalette {
+  background: string;
+  /** 跟随时给出的墨色三档；没开自定义文字色时为 null（交给磁贴按底色推导） */
+  ink: { title: string; content: string; empty: string } | null;
+}
+
+/**
+ * 「磁贴跟随界面配色」的判定。
+ *
+ * 花笺的磁贴原本走独立的一套设置（设置 → 磁贴颜色），跟界面底色/文字色互不相干，
+ * 于是自定义界面配色之后，磁贴会跟主界面撞色（白界面 + 米黄磁贴）。
+ * 这里约定：只要用户**没有显式指定**磁贴颜色（tileColorMode !== "custom"）
+ * 且开了自定义界面底色，磁贴就直接沿用界面配色。
+ *
+ * 返回 null 表示不跟随，磁贴继续走它自己的 tileColor 逻辑。
+ */
+export function resolveTileFollowPalette(
+  config: AppConfig,
+  theme: "light" | "dark",
+): TileFollowPalette | null {
+  if (config.tileColorMode === "custom") return null;
+  if (!config.customSurfaceEnabled) return null;
+
+  const vars = resolveAppearanceVars(config, theme);
+  const background = vars.surface?.paper ?? vars.paper;
+
+  return {
+    background,
+    // 标题比正文淡一档、空态再淡一档，维持磁贴原本的层次感
+    ink: vars.text
+      ? { title: vars.text.faint, content: vars.text.ink, empty: vars.text.ghost }
+      : null,
+  };
+}
+
 function flattenVars(vars: ReturnType<typeof resolveAppearanceVars>): Record<string, string> {
   const flat: Record<string, string> = {};
   if (vars.accent) {
