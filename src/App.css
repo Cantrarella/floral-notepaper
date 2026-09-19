@@ -751,3 +751,12 @@ input::placeholder {
 :root[data-theme="dark"] .markdown-alert-caution .markdown-alert-title {
   color: #e87462;
 }
+
+/* 自绘托盘菜单：只有「退出」用暗红字色区分，背景仍走常规悬停，避免误点 */
+.tray-menu-danger {
+  color: #8f2626;
+}
+
+:root[data-theme="dark"] .tray-menu-danger {
+  color: #cf9a9a;
+}

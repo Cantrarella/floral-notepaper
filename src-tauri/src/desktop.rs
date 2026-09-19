@@ -8,9 +8,10 @@ use std::sync::OnceLock;
 use std::{
     error::Error,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Mutex,
     },
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 #[cfg(target_os = "windows")]
@@ -400,12 +401,14 @@ mod keyboard_hook {
     }
 }
 use tauri::{
-    menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     App, AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl,
     WebviewWindowBuilder, Window, WindowEvent, Wry,
 };
 use uuid::Uuid;
+
+#[cfg(target_os = "macos")]
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 
 #[cfg(target_os = "macos")]
 use tauri::menu::Submenu;
@@ -424,6 +427,31 @@ const TRAY_QUICK_NOTE_ID: &str = "quick-note";
 const TRAY_TOGGLE_CLOSE_TO_TRAY_ID: &str = "toggle-close-to-tray";
 const TRAY_TOGGLE_AUTOSTART_ID: &str = "toggle-autostart";
 const TRAY_QUIT_ID: &str = "quit";
+
+/// 自绘托盘菜单的窗口标签（Windows / Linux 专用）。
+///
+/// Win32 的原生菜单句柄不接受任何样式，于是这两个平台上不再给托盘挂系统菜单，
+/// 改为右键弹出一个无边框小窗，配色跟随花笺主题。
+const TRAY_MENU_WINDOW_LABEL: &str = "tray-menu";
+#[cfg(not(target_os = "macos"))]
+const TRAY_MENU_OPENED_EVENT: &str = "tray-menu-opened";
+
+/// 自绘菜单的版面尺寸（逻辑像素），与 `src/components/TrayMenu.tsx` 的
+/// 内边距、行高保持一致：10 + 34×5 + 9 + 10 = 199，宽 224。
+#[cfg(not(target_os = "macos"))]
+const TRAY_MENU_WIDTH: f64 = 224.0;
+#[cfg(not(target_os = "macos"))]
+const TRAY_MENU_HEIGHT: f64 = 199.0;
+/// 窗口四周多留的透明边距，用来承载 CSS 投影（无边框窗会把溢出部分裁掉）
+#[cfg(not(target_os = "macos"))]
+const TRAY_MENU_SHADOW_MARGIN: f64 = 8.0;
+/// 菜单因失焦收起后，这个时间窗内忽略新的弹出请求——否则点托盘右键想收起
+/// 菜单时，失焦收起与随后的 WM_RBUTTONUP 会前后脚到达，菜单又弹回来
+#[cfg(not(target_os = "macos"))]
+const TRAY_MENU_REOPEN_GUARD_MS: u64 = 250;
+
+/// 最近一次收起自绘菜单的时间戳（Unix 毫秒），用于上面那条防抖判断
+static TRAY_MENU_HIDDEN_AT_MS: AtomicU64 = AtomicU64::new(0);
 
 #[cfg(target_os = "macos")]
 static FULLSCREEN_HIDING: AtomicBool = AtomicBool::new(false);
@@ -717,6 +745,55 @@ pub fn tray_menu_specs(locale: Locale, close_to_tray: bool, autostart: bool) -> 
     ]
 }
 
+/// 自绘托盘菜单的一项，序列化后交给前端渲染。
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrayMenuEntry {
+    pub id: String,
+    pub label: String,
+    /// `item` | `check` | `separator` | `danger`
+    pub kind: &'static str,
+    pub checked: bool,
+}
+
+/// 把原生菜单的规格翻译成自绘菜单的渲染数据。文案与勾选状态一律以后端为准，
+/// 前端不再维护第二份翻译表，也和 macOS 原生菜单共用同一批字符串。
+pub fn tray_menu_entries(app: &AppHandle) -> Result<Vec<TrayMenuEntry>, AppError> {
+    let config = load_config()?;
+    let locale = locale_from_config(&config);
+    let autostart = autostart_enabled(app, config.autostart);
+    let specs = tray_menu_specs(locale, config.close_to_tray, autostart);
+
+    let mut entries = Vec::with_capacity(specs.len() + 1);
+    let last = specs.len().saturating_sub(1);
+    for (index, spec) in specs.iter().enumerate() {
+        // 「退出」前补一条分隔线，排版跟原生菜单保持一致
+        if index == last {
+            entries.push(TrayMenuEntry {
+                id: "separator".to_string(),
+                label: String::new(),
+                kind: "separator",
+                checked: false,
+            });
+        }
+
+        entries.push(TrayMenuEntry {
+            id: spec.id.to_string(),
+            label: spec.label.to_string(),
+            kind: if index == last {
+                "danger"
+            } else if spec.checked.is_some() {
+                "check"
+            } else {
+                "item"
+            },
+            checked: spec.checked.unwrap_or(false),
+        });
+    }
+
+    Ok(entries)
+}
+
 fn locale_from_config(config: &AppConfig) -> Locale {
     Locale::from_tag(&config.locale)
 }
@@ -727,6 +804,7 @@ fn configured_locale() -> Locale {
         .unwrap_or_default()
 }
 
+#[cfg(target_os = "macos")]
 fn build_tray_menu(app: &AppHandle, config: &AppConfig) -> Result<Menu<Wry>, Box<dyn Error>> {
     let locale = locale_from_config(config);
     let autostart = autostart_enabled(app, config.autostart);
@@ -883,10 +961,205 @@ fn refresh_tray_menu(app: &AppHandle, config: &AppConfig) -> Result<(), Box<dyn 
         return Ok(());
     };
 
-    let menu = build_tray_menu(app, config)?;
-    tray.set_menu(Some(menu))?;
+    // Windows / Linux 的托盘菜单是自绘小窗，托盘上不挂系统菜单；
+    // 配置变化后菜单项由前端重新拉取，这里只需刷新提示文字。
+    #[cfg(target_os = "macos")]
+    {
+        let menu = build_tray_menu(app, config)?;
+        tray.set_menu(Some(menu))?;
+    }
+
     tray.set_tooltip(Some(locales::tray_tooltip(locale_from_config(config))))?;
     Ok(())
+}
+
+/// 托盘图标的物理坐标矩形（px），给自绘菜单定位用。
+#[cfg(not(target_os = "macos"))]
+#[derive(Clone, Copy, Debug)]
+pub struct TrayIconBox {
+    pub left: f64,
+    pub top: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+/// 托盘事件给的 `rect` 用的是 `Position` / `Size` 枚举（可能是物理像素也可能是
+/// 逻辑像素），统一折成物理像素再参与布局计算。
+#[cfg(not(target_os = "macos"))]
+fn tray_icon_box(rect: tauri::Rect) -> TrayIconBox {
+    let (left, top) = match rect.position {
+        tauri::Position::Physical(position) => (f64::from(position.x), f64::from(position.y)),
+        tauri::Position::Logical(position) => (position.x, position.y),
+    };
+    let (width, height) = match rect.size {
+        tauri::Size::Physical(size) => (f64::from(size.width), f64::from(size.height)),
+        tauri::Size::Logical(size) => (size.width, size.height),
+    };
+
+    TrayIconBox {
+        left,
+        top,
+        width,
+        height,
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn tray_menu_hidden_recently() -> bool {
+    let hidden_at = TRAY_MENU_HIDDEN_AT_MS.load(Ordering::Relaxed);
+    if hidden_at == 0 {
+        return false;
+    }
+    let Ok(elapsed) = SystemTime::now().duration_since(UNIX_EPOCH) else {
+        return false;
+    };
+    (elapsed.as_millis() as u64).saturating_sub(hidden_at) < TRAY_MENU_REOPEN_GUARD_MS
+}
+
+/// 收起自绘托盘菜单。macOS 上没有这个窗口，调用是空操作。
+pub fn hide_tray_menu_window(app: &AppHandle) {
+    let Some(window) = app.get_webview_window(TRAY_MENU_WINDOW_LABEL) else {
+        return;
+    };
+
+    if window.is_visible().unwrap_or(false) {
+        if let Ok(elapsed) = SystemTime::now().duration_since(UNIX_EPOCH) {
+            TRAY_MENU_HIDDEN_AT_MS.store(elapsed.as_millis() as u64, Ordering::Relaxed);
+        }
+    }
+
+    let _ = window.hide();
+}
+
+#[cfg(not(target_os = "macos"))]
+fn show_tray_menu_window(app: &AppHandle, icon: TrayIconBox) -> Result<(), AppError> {
+    // 菜单刚因失焦收起，说明这次 WM_RBUTTONUP 属于同一次右键，
+    // 用户的本意是「收起菜单」，不该立刻又弹出来
+    if tray_menu_hidden_recently() {
+        TRAY_MENU_HIDDEN_AT_MS.store(0, Ordering::Relaxed);
+        return Ok(());
+    }
+
+    let window = match app.get_webview_window(TRAY_MENU_WINDOW_LABEL) {
+        Some(window) => window,
+        None => create_tray_menu_window(app)?,
+    };
+
+    let (x, y, width, height) = tray_menu_placement(app, icon);
+    window.set_size(PhysicalSize::new(width, height))?;
+    window.set_position(PhysicalPosition::new(x, y))?;
+    window.show()?;
+    window.set_focus()?;
+    let _ = app.emit(TRAY_MENU_OPENED_EVENT, ());
+
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn create_tray_menu_window(app: &AppHandle) -> Result<tauri::WebviewWindow, AppError> {
+    let window = WebviewWindowBuilder::new(
+        app,
+        TRAY_MENU_WINDOW_LABEL,
+        WebviewUrl::App("index.html?view=tray-menu".into()),
+    )
+    .title(String::new())
+    .inner_size(
+        TRAY_MENU_WIDTH + TRAY_MENU_SHADOW_MARGIN * 2.0,
+        TRAY_MENU_HEIGHT + TRAY_MENU_SHADOW_MARGIN * 2.0,
+    )
+    .resizable(false)
+    .maximizable(false)
+    .minimizable(false)
+    .decorations(false)
+    .transparent(true)
+    .always_on_top(true)
+    .shadow(false)
+    .skip_taskbar(true)
+    .visible(false)
+    .focused(false)
+    .build()
+    .map_err(|error| AppError {
+        code: "trayMenuWindow".into(),
+        message: error.to_string(),
+        details: Default::default(),
+    })?;
+
+    Ok(window)
+}
+
+/// 算出菜单窗的物理位置与尺寸：紧贴托盘图标朝屏幕内侧展开，再按当前显示器的
+/// 工作区收边，避免贴边被裁掉，也避免多屏下弹到别的屏幕上。
+#[cfg(not(target_os = "macos"))]
+fn tray_menu_placement(app: &AppHandle, icon: TrayIconBox) -> (i32, i32, u32, u32) {
+    let anchor_x = icon.left + icon.width / 2.0;
+    let anchor_y = icon.top + icon.height / 2.0;
+
+    let monitor = app
+        .monitor_from_point(anchor_x, anchor_y)
+        .ok()
+        .flatten()
+        .or_else(|| app.primary_monitor().ok().flatten());
+
+    let scale = monitor.as_ref().map(|m| m.scale_factor()).unwrap_or(1.0);
+    let work = monitor.as_ref().map(|m| {
+        let area = m.work_area();
+        let left = area.position.x;
+        let top = area.position.y;
+        (
+            left,
+            top,
+            left + area.size.width as i32,
+            top + area.size.height as i32,
+        )
+    });
+
+    let width = ((TRAY_MENU_WIDTH + TRAY_MENU_SHADOW_MARGIN * 2.0) * scale).round() as i32;
+    let height = ((TRAY_MENU_HEIGHT + TRAY_MENU_SHADOW_MARGIN * 2.0) * scale).round() as i32;
+    let icon_right = icon.left + icon.width;
+    let icon_bottom = icon.top + icon.height;
+
+    // 托盘图标长在任务栏上，用图标相对工作区的位置判断任务栏贴在哪条边，
+    // 菜单一律朝工作区内侧展开
+    let (mut x, mut y) = match work {
+        Some((left, top, right, bottom)) => {
+            let horizontal = anchor_x >= left as f64 && anchor_x <= right as f64;
+            let vertical = anchor_y >= top as f64 && anchor_y <= bottom as f64;
+
+            if vertical && horizontal {
+                // 工作区包含了图标（自隐藏任务栏等），按最常见的底部任务栏处理
+                (icon_right - width as f64, icon.top - height as f64)
+            } else if !vertical && anchor_y > bottom as f64 {
+                // 底部任务栏：菜单底边贴住图标顶边
+                (icon_right - width as f64, icon.top - height as f64)
+            } else if !vertical {
+                // 顶部任务栏：向下展开
+                (icon.left, icon_bottom)
+            } else if anchor_x > right as f64 {
+                // 右侧任务栏：向左展开
+                (icon.left - width as f64, icon_bottom - height as f64)
+            } else {
+                // 左侧任务栏：向右展开
+                (icon_right, icon_bottom - height as f64)
+            }
+        }
+        None => (icon_right - width as f64, icon.top - height as f64),
+    };
+
+    if let Some((left, top, right, bottom)) = work {
+        let min_x = left as f64;
+        let max_x = ((right - width) as f64).max(min_x);
+        let min_y = top as f64;
+        let max_y = ((bottom - height) as f64).max(min_y);
+        x = x.clamp(min_x, max_x);
+        y = y.clamp(min_y, max_y);
+    }
+
+    (
+        x.round() as i32,
+        y.round() as i32,
+        width as u32,
+        height as u32,
+    )
 }
 
 fn refresh_window_titles(app: &AppHandle, config: &AppConfig) -> Result<(), AppError> {
@@ -1158,7 +1431,25 @@ pub fn setup_desktop(app: &mut App) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// 自绘托盘菜单窗只在需要时露面：一旦失焦或被要求关闭就先收起来，
+/// 但窗口本身留着复用，省掉每次右键都重建一个 WebView 的开销。
+fn handle_tray_menu_window_event(window: &Window, event: &WindowEvent) {
+    match event {
+        WindowEvent::Focused(false) => hide_tray_menu_window(window.app_handle()),
+        WindowEvent::CloseRequested { api, .. } => {
+            api.prevent_close();
+            hide_tray_menu_window(window.app_handle());
+        }
+        _ => {}
+    }
+}
+
 pub fn handle_window_event(window: &Window, event: &WindowEvent) {
+    if window.label() == TRAY_MENU_WINDOW_LABEL {
+        handle_tray_menu_window_event(window, event);
+        return;
+    }
+
     if matches!(event, WindowEvent::Destroyed) {
         if let Some(note_id) = window.label().strip_prefix("tile-") {
             let _ = window
@@ -1276,33 +1567,60 @@ fn main_window_close_action(app_is_exiting: bool, close_to_tray: bool) -> MainWi
 
 fn setup_tray(app: &mut App) -> Result<(), Box<dyn Error>> {
     let config = load_config()?;
-    let menu = build_tray_menu(app.handle(), &config)?;
     let locale = locale_from_config(&config);
 
-    TrayIconBuilder::with_id(TRAY_ID)
+    #[allow(unused_mut)]
+    let mut builder: TrayIconBuilder<Wry> = TrayIconBuilder::with_id(TRAY_ID)
         .icon(
             app.default_window_icon()
                 .expect("missing default window icon")
                 .clone(),
         )
         .tooltip(locales::tray_tooltip(locale))
-        .menu(&menu)
-        .show_menu_on_left_click(cfg!(target_os = "macos"))
-        .on_menu_event(|app, event| {
+        .show_menu_on_left_click(cfg!(target_os = "macos"));
+
+    // macOS 的托盘菜单得守系统菜单栏的规范，继续用原生菜单；Windows / Linux
+    // 上 Win32 原生菜单句柄压根不接受样式，于是不挂系统菜单，右键改成弹自绘小窗
+    #[cfg(target_os = "macos")]
+    {
+        let menu = build_tray_menu(app.handle(), &config)?;
+        builder = builder.menu(&menu).on_menu_event(|app, event| {
             if let Err(error) = handle_tray_menu_event(app, event.id.as_ref()) {
                 eprintln!("failed to handle tray menu event {:?}: {error}", event.id);
             }
-        })
+        });
+    }
+
+    builder
         .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
+            let TrayIconEvent::Click {
+                button,
                 button_state: MouseButtonState::Up,
+                rect,
                 ..
             } = event
-            {
-                if let Err(error) = show_main_window(tray.app_handle()) {
-                    eprintln!("failed to show main window from tray: {error}");
+            else {
+                return;
+            };
+
+            match button {
+                MouseButton::Left => {
+                    if let Err(error) = show_main_window(tray.app_handle()) {
+                        eprintln!("failed to show main window from tray: {error}");
+                    }
                 }
+                MouseButton::Right => {
+                    #[cfg(target_os = "macos")]
+                    let _ = rect;
+
+                    #[cfg(not(target_os = "macos"))]
+                    if let Err(error) =
+                        show_tray_menu_window(tray.app_handle(), tray_icon_box(rect))
+                    {
+                        eprintln!("failed to open the custom tray menu: {error}");
+                    }
+                }
+                _ => {}
             }
         })
         .build(app)?;
@@ -1349,6 +1667,20 @@ fn handle_tray_menu_event(app: &AppHandle, id: &str) -> Result<(), Box<dyn Error
     }
 
     Ok(())
+}
+
+/// 处理自绘菜单里的一次点击：动作本身复用原生菜单的分发逻辑，
+/// 无论成败都先把菜单窗收起来。
+pub fn tray_menu_invoke(app: &AppHandle, id: &str) -> Result<(), AppError> {
+    let outcome = handle_tray_menu_event(app, id).map_err(|error| AppError {
+        code: "trayMenu".into(),
+        message: error.to_string(),
+        details: Default::default(),
+    });
+
+    hide_tray_menu_window(app);
+
+    outcome
 }
 
 fn handle_app_menu_event(app: &AppHandle, id: &str) -> Result<(), Box<dyn Error>> {
@@ -1568,6 +1900,29 @@ fn save_surface_size(window: &tauri::WebviewWindow) {
 fn should_save_surface_size_before_close(label: &str) -> bool {
     label.starts_with("notepad-") || label.starts_with("tile-")
 }
+
+/// 提前把自绘菜单窗建好并把前端渲染完，这样右键时只剩「挪位置 + 显示」，
+/// 不会在托盘图标旁边冷启一次 WebView 而白一下。
+#[cfg(not(target_os = "macos"))]
+fn schedule_tray_menu_prewarm(app: &AppHandle) {
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        // 稍等一下再建，避开启动时主窗和便签窗池的抢跑
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+        let inner = handle.clone();
+        let _ = handle.run_on_main_thread(move || {
+            if inner.get_webview_window(TRAY_MENU_WINDOW_LABEL).is_some() {
+                return;
+            }
+            if let Err(error) = create_tray_menu_window(&inner) {
+                eprintln!("failed to prewarm the tray menu window: {error}");
+            }
+        });
+    });
+}
+
+#[cfg(target_os = "macos")]
+fn schedule_tray_menu_prewarm(_app: &AppHandle) {}
 
 fn schedule_notepad_prewarm(app: &AppHandle) {
     for i in 0..NOTEPAD_POOL_CAPACITY {
@@ -1886,8 +2241,10 @@ fn tile_window_label(note_id: &str) -> String {
 }
 
 fn dynamic_window_visual_options(label: &str) -> DynamicWindowVisualOptions {
-    let is_app_surface =
-        label == MAIN_WINDOW_LABEL || label.starts_with("notepad-") || label.starts_with("tile-");
+    let is_app_surface = label == MAIN_WINDOW_LABEL
+        || label == TRAY_MENU_WINDOW_LABEL
+        || label.starts_with("notepad-")
+        || label.starts_with("tile-");
 
     DynamicWindowVisualOptions {
         transparent: is_app_surface,

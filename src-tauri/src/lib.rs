@@ -366,6 +366,22 @@ async fn open_note_in_editor(app: AppHandle, note_id: String) -> Result<(), AppE
 }
 
 #[tauri::command]
+fn tray_menu_entries(app: AppHandle) -> Result<Vec<desktop::TrayMenuEntry>, AppError> {
+    desktop::tray_menu_entries(&app)
+}
+
+#[tauri::command]
+fn tray_menu_invoke(app: AppHandle, id: String) -> Result<(), AppError> {
+    desktop::tray_menu_invoke(&app, &id)
+}
+
+#[tauri::command]
+fn tray_menu_hide(app: AppHandle) -> Result<(), AppError> {
+    desktop::hide_tray_menu_window(&app);
+    Ok(())
+}
+
+#[tauri::command]
 fn take_startup_file() -> Option<String> {
     desktop::take_startup_file()
 }
@@ -501,6 +517,9 @@ pub fn run() {
             open_tile_window,
             toggle_tile_window,
             open_note_in_editor,
+            tray_menu_entries,
+            tray_menu_invoke,
+            tray_menu_hide,
             updater::commands::update_status,
             updater::commands::update_settings_get,
             updater::commands::update_settings_save,

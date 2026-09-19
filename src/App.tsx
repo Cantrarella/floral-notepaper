@@ -5,6 +5,7 @@ import { MainWindow } from "./components/MainWindow";
 import { NotePad } from "./components/NotePad";
 import { TileShowcase } from "./components/TileShowcase";
 import { ToastContainer } from "./components/Toast";
+import { TrayMenu } from "./components/TrayMenu";
 import { tabToIndentListener } from "indent-textarea";
 import { getConfig } from "./features/settings/api";
 import { applyAppearance } from "./features/settings/appearance";
@@ -109,6 +110,8 @@ function App() {
           <MainWindow />
         ) : activeView === "notepad" ? (
           <NotePad initialNoteId={route.noteId} />
+        ) : activeView === "tray-menu" ? (
+          <TrayMenu />
         ) : (
           <TileShowcase noteId={route.noteId} />
         )}
