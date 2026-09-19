@@ -1,0 +1,61 @@
+name: Build Custom Windows Installer
+
+# 本 fork 的定制版：只编译 Windows 安装包（GitHub 的 windows-latest 自带 MSVC，
+# 本机就不用装 3-5 GB 的 VS Build Tools 了）。手动触发或推到 main 都行。
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号（留空用源码里的）"
+        required: false
+        type: string
+  push:
+    branches: [main]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Set version
+        shell: pwsh
+        run: |
+          $ver = "${{ github.event.inputs.version }}"
+          if (-not $ver) { $ver = "1.2.1" }
+          node scripts/set-version.mjs $ver
+
+      - name: Preload NSIS toolchain
+        shell: pwsh
+        run: ./scripts/prepare-nsis-toolchain.ps1
+
+      - name: Build
+        run: npm run tauri build
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: floral-notepaper-custom-windows
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/floral-notepaper.exe
+          if-no-files-found: error
+          retention-days: 30
