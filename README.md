@@ -2,6 +2,12 @@
 
 **简体中文** | [繁體中文](README_zh-HK.md) | [English](README_en-US.md)
 
+> [!NOTE]
+> **这是定制版 fork** · This is a customized fork
+> 在原版 v1.2.0 基础上新增了主题色 / 文字色 / 界面底色自定义，以及渐变与纯色背景。
+> See [CUSTOMIZATION.md](CUSTOMIZATION.md) for what changed.
+> 原作者仓库 · Upstream: [Achilng/floral-notepaper](https://github.com/Achilng/floral-notepaper) ｜ 许可证 · License: MIT
+
 <div align="center">
 
 <img src="./src-tauri/icons/icon.png" width="120" alt="花笺图标">
