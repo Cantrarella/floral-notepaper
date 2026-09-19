@@ -430,6 +430,15 @@
       "custom": "自訂主題色",
       "current": "{{theme}}主題用色"
     },
+    "surface": {
+      "label": "介面底色",
+      "custom": "自訂介面底色",
+      "paper": "{{theme}}主題 · 主背景",
+      "warm": "{{theme}}主題 · 控件底（搜尋框/卡片列）",
+      "deep": "{{theme}}主題 · 分隔線與描邊",
+      "hint": "剛打開時已按你的主題色配好一套；換了主題色可以重新對齊",
+      "resync": "按主題色重算"
+    },
     "textColor": {
       "label": "文字顏色",
       "custom": "自訂文字顏色",

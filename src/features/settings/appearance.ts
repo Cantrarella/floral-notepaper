@@ -28,6 +28,15 @@ export const DEFAULT_PAPER: Record<"light" | "dark", string> = {
   dark: "#222120",
 };
 
+/** 内置界面底色三档，与 App.css 的 --color-paper / -warm / -deep 保持一致 */
+export const DEFAULT_SURFACE: Record<
+  "light" | "dark",
+  { paper: string; warm: string; deep: string }
+> = {
+  light: { paper: "#f6f3ec", warm: "#f0ebe0", deep: "#e8e1d3" },
+  dark: { paper: "#222120", warm: "#2c2a27", deep: "#3c3935" },
+};
+
 const ACCENT_VARS = [
   "--color-bamboo",
   "--color-bamboo-light",
@@ -41,6 +50,8 @@ const TEXT_VARS = [
   "--color-ink-faint",
   "--color-ink-ghost",
 ] as const;
+
+const SURFACE_VARS = ["--color-paper", "--color-paper-warm", "--color-paper-deep"] as const;
 
 const HEX6 = /^#?([0-9a-fA-F]{6})$/;
 const HEX3 = /^#?([0-9a-fA-F]{3})$/;
@@ -104,6 +115,36 @@ export function deriveTextPalette(
   };
 }
 
+/**
+ * 由主题色派生出配套的界面底色三档。
+ *
+ * 花笺内置的底色是偏黄的"纸色"（#f6f3ec 一系），换成冷色主题色时黄底会打架，
+ * 所以这里取主题色的色相、降饱和后**锁定亮度**，得到同一色系的极浅（浅色主题）
+ * 或极深（深色主题）底色，保证"蓝主题配蓝灰底"而不是"蓝主题配黄底"。
+ *
+ * 两条踩过的坑：
+ * - 不能直接拿饱和色掺白/黑（chroma.mix）：浅色端会被冲成灰白、几乎看不出色相，
+ *   深色端则会亮成中灰蓝（实测 #657994），浅色文字压上去直接糊掉。
+ * - 亮度档位是照内置纸色标定的（浅色 0.955/0.925/0.875，深色 0.125/0.160/0.220），
+ *   这样换色相不换明暗，内置的文字色对比度基本不损失。
+ */
+export function deriveSurfacePalette(
+  base: string,
+  theme: "light" | "dark",
+): { paper: string; warm: string; deep: string } {
+  const tint = chroma(base).desaturate(theme === "light" ? 0.3 : 0.5);
+  const lightness =
+    theme === "light"
+      ? { paper: 0.955, warm: 0.925, deep: 0.875 }
+      : { paper: 0.125, warm: 0.16, deep: 0.22 };
+
+  return {
+    paper: tint.set("hsl.l", lightness.paper).hex(),
+    warm: tint.set("hsl.l", lightness.warm).hex(),
+    deep: tint.set("hsl.l", lightness.deep).hex(),
+  };
+}
+
 /** WCAG 相对对比度，(亮+0.05)/(暗+0.05)，1 到 21 */
 export function contrastRatio(foreground: string, background: string): number {
   const first = chroma(foreground).luminance();
@@ -119,24 +160,46 @@ export const CONTRAST_GOOD = 4.5;
 export interface AppearanceVars {
   accent: { base: string; light: string; mist: string; glow: string };
   text: { ink: string; soft: string; faint: string; ghost: string };
+  surface: { paper: string; warm: string; deep: string };
 }
 
 /** 算出某主题下最终要写入的 CSS 变量值（不落盘、不碰 DOM，方便给 UI 做预览） */
 export function resolveAppearanceVars(
   config: AppConfig,
   theme: "light" | "dark",
-): { accent: AppearanceVars["accent"] | null; text: AppearanceVars["text"] | null } {
-  const paper = DEFAULT_PAPER[theme];
+): {
+  accent: AppearanceVars["accent"] | null;
+  text: AppearanceVars["text"] | null;
+  surface: AppearanceVars["surface"] | null;
+  /** 当前主题下实际生效的底色（没自定义就是内置纸色），对比度要按它算 */
+  paper: string;
+} {
+  const accentSource = normalizeHex(
+    theme === "dark" ? config.accentColorDark : config.accentColorLight,
+    DEFAULT_ACCENT[theme],
+  );
+  const derivedSurface = deriveSurfacePalette(accentSource, theme);
 
-  const accent = config.customAccentEnabled
-    ? deriveAccentPalette(
-        normalizeHex(
-          theme === "dark" ? config.accentColorDark : config.accentColorLight,
-          DEFAULT_ACCENT[theme],
+  const surface = config.customSurfaceEnabled
+    ? {
+        paper: normalizeHex(
+          theme === "dark" ? config.surfaceColorDark : config.surfaceColorLight,
+          derivedSurface.paper,
         ),
-        theme,
-      )
+        warm: normalizeHex(
+          theme === "dark" ? config.surfaceWarmDark : config.surfaceWarmLight,
+          derivedSurface.warm,
+        ),
+        deep: normalizeHex(
+          theme === "dark" ? config.surfaceDeepDark : config.surfaceDeepLight,
+          derivedSurface.deep,
+        ),
+      }
     : null;
+
+  const paper = surface?.paper ?? DEFAULT_PAPER[theme];
+
+  const accent = config.customAccentEnabled ? deriveAccentPalette(accentSource, theme) : null;
 
   const text = config.customTextColorEnabled
     ? deriveTextPalette(
@@ -152,7 +215,7 @@ export function resolveAppearanceVars(
       )
     : null;
 
-  return { accent, text };
+  return { accent, text, surface, paper };
 }
 
 function flattenVars(vars: ReturnType<typeof resolveAppearanceVars>): Record<string, string> {
@@ -168,6 +231,11 @@ function flattenVars(vars: ReturnType<typeof resolveAppearanceVars>): Record<str
     flat["--color-ink-soft"] = vars.text.soft;
     flat["--color-ink-faint"] = vars.text.faint;
     flat["--color-ink-ghost"] = vars.text.ghost;
+  }
+  if (vars.surface) {
+    flat["--color-paper"] = vars.surface.paper;
+    flat["--color-paper-warm"] = vars.surface.warm;
+    flat["--color-paper-deep"] = vars.surface.deep;
   }
   return flat;
 }
@@ -198,7 +266,7 @@ export function applyAppearance(config: AppConfig, theme?: "light" | "dark"): vo
   const resolved = theme ?? (root.getAttribute("data-theme") === "dark" ? "dark" : "light");
   const vars = flattenVars(resolveAppearanceVars(config, resolved));
 
-  for (const name of [...ACCENT_VARS, ...TEXT_VARS]) {
+  for (const name of [...ACCENT_VARS, ...TEXT_VARS, ...SURFACE_VARS]) {
     const value = vars[name];
     if (value) {
       root.style.setProperty(name, value);
@@ -215,7 +283,7 @@ export function applyAppearance(config: AppConfig, theme?: "light" | "dark"): vo
 export function clearAppearance(): void {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
-  for (const name of [...ACCENT_VARS, ...TEXT_VARS]) {
+  for (const name of [...ACCENT_VARS, ...TEXT_VARS, ...SURFACE_VARS]) {
     root.style.removeProperty(name);
   }
 }

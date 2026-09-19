@@ -70,4 +70,15 @@ export interface AppConfig {
   /** 淡色文字/图标色 */
   textFaintLight?: string;
   textFaintDark?: string;
+  /** 是否启用自定义界面底色（侧栏、输入框、卡片行、分隔线） */
+  customSurfaceEnabled?: boolean;
+  /** 主背景纸色 */
+  surfaceColorLight?: string;
+  surfaceColorDark?: string;
+  /** 控件底色：搜索框、卡片行、设置行 */
+  surfaceWarmLight?: string;
+  surfaceWarmDark?: string;
+  /** 分隔线与描边 */
+  surfaceDeepLight?: string;
+  surfaceDeepDark?: string;
 }

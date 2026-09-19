@@ -4,11 +4,13 @@ import { useTranslation } from "react-i18next";
 import {
   CONTRAST_GOOD,
   DEFAULT_ACCENT,
-  DEFAULT_PAPER,
+  DEFAULT_SURFACE,
   DEFAULT_TEXT,
   contrastRatio,
+  deriveSurfacePalette,
   deriveTextPalette,
   normalizeHex,
+  resolveAppearanceVars,
 } from "../features/settings/appearance";
 import type { AppConfig } from "../features/settings/types";
 import { ColorRow } from "./ColorRow";
@@ -63,6 +65,7 @@ export function AppearanceSection({ config, onChange }: AppearanceSectionProps) 
 
   const accentEnabled = config.customAccentEnabled ?? false;
   const textEnabled = config.customTextColorEnabled ?? false;
+  const surfaceEnabled = config.customSurfaceEnabled ?? false;
 
   // 用于给"当前正在编辑哪套主题"的字段加前缀
   const themeName = t(theme === "dark" ? "settings.theme.dark" : "settings.theme.light", {
@@ -82,23 +85,48 @@ export function AppearanceSection({ config, onChange }: AppearanceSectionProps) 
     DEFAULT_TEXT[theme].faint,
   );
 
-  // 当前主题下四档墨色对纸色的实际对比度，用来判断"看不看得清"
+  // 界面底色三档：按主题色派生出来的"配套底色"，用户没手改时就是它
+  const derivedSurface = useMemo(
+    () => deriveSurfacePalette(accentValue, theme),
+    [accentValue, theme],
+  );
+  const surfaceValue = {
+    paper: normalizeHex(
+      theme === "dark" ? config.surfaceColorDark : config.surfaceColorLight,
+      derivedSurface.paper,
+    ),
+    warm: normalizeHex(
+      theme === "dark" ? config.surfaceWarmDark : config.surfaceWarmLight,
+      derivedSurface.warm,
+    ),
+    deep: normalizeHex(
+      theme === "dark" ? config.surfaceDeepDark : config.surfaceDeepLight,
+      derivedSurface.deep,
+    ),
+  };
+
+  // 当前主题下实际生效的底色——对比度必须按它算，否则用户改了底色提示会骗人
+  const effectivePaper = useMemo(() => resolveAppearanceVars(config, theme).paper, [config, theme]);
+
+  // 当前主题下四档墨色对底色的实际对比度，用来判断"看不看得清"
   const contrasts = useMemo(() => {
-    const paper = DEFAULT_PAPER[theme];
-    const palette = deriveTextPalette(textPrimary, textFaint, paper);
+    const palette = deriveTextPalette(textPrimary, textFaint, effectivePaper);
     return {
-      ink: contrastRatio(palette.ink, paper),
-      soft: contrastRatio(palette.soft, paper),
-      faint: contrastRatio(palette.faint, paper),
-      ghost: contrastRatio(palette.ghost, paper),
+      ink: contrastRatio(palette.ink, effectivePaper),
+      soft: contrastRatio(palette.soft, effectivePaper),
+      faint: contrastRatio(palette.faint, effectivePaper),
+      ghost: contrastRatio(palette.ghost, effectivePaper),
     };
-  }, [theme, textPrimary, textFaint]);
+  }, [effectivePaper, textPrimary, textFaint]);
 
   /** 把淡色往正文色方向推，直到对比度达标——图标看不清时的一键解药 */
   const boostFaintContrast = () => {
-    const paper = DEFAULT_PAPER[theme];
     let candidate = textFaint;
-    for (let step = 0; step < 24 && contrastRatio(candidate, paper) < CONTRAST_GOOD; step += 1) {
+    for (
+      let step = 0;
+      step < 24 && contrastRatio(candidate, effectivePaper) < CONTRAST_GOOD;
+      step += 1
+    ) {
       candidate = chroma.mix(candidate, textPrimary, 0.12).hex();
     }
     patch(theme === "dark" ? { textFaintDark: candidate } : { textFaintLight: candidate });
@@ -114,6 +142,68 @@ export function AppearanceSection({ config, onChange }: AppearanceSectionProps) 
     } else {
       patch(target === "primary" ? { textColorLight: value } : { textFaintLight: value });
     }
+  };
+
+  /**
+   * 开关界面底色。首次打开时按当前主题色派生一套填进去（"跟着主题色走"），
+   * 免得开了开关还是原来的黄纸底、跟冷色主题色打架。
+   */
+  const toggleSurface = (checked: boolean) => {
+    if (!checked) {
+      patch({ customSurfaceEnabled: false });
+      return;
+    }
+    const untouched =
+      theme === "dark"
+        ? !config.surfaceColorDark && !config.surfaceWarmDark && !config.surfaceDeepDark
+        : !config.surfaceColorLight && !config.surfaceWarmLight && !config.surfaceDeepLight;
+
+    if (!untouched) {
+      patch({ customSurfaceEnabled: true });
+      return;
+    }
+
+    patch(
+      theme === "dark"
+        ? {
+            customSurfaceEnabled: true,
+            surfaceColorDark: derivedSurface.paper,
+            surfaceWarmDark: derivedSurface.warm,
+            surfaceDeepDark: derivedSurface.deep,
+          }
+        : {
+            customSurfaceEnabled: true,
+            surfaceColorLight: derivedSurface.paper,
+            surfaceWarmLight: derivedSurface.warm,
+            surfaceDeepLight: derivedSurface.deep,
+          },
+    );
+  };
+
+  const setSurfaceFor = (target: "paper" | "warm" | "deep", value: string) => {
+    const dark = theme === "dark";
+    if (target === "paper")
+      patch(dark ? { surfaceColorDark: value } : { surfaceColorLight: value });
+    else if (target === "warm")
+      patch(dark ? { surfaceWarmDark: value } : { surfaceWarmLight: value });
+    else patch(dark ? { surfaceDeepDark: value } : { surfaceDeepLight: value });
+  };
+
+  /** 主题色改过之后再点一下，底色重新跟主题色对齐 */
+  const resyncSurface = () => {
+    patch(
+      theme === "dark"
+        ? {
+            surfaceColorDark: derivedSurface.paper,
+            surfaceWarmDark: derivedSurface.warm,
+            surfaceDeepDark: derivedSurface.deep,
+          }
+        : {
+            surfaceColorLight: derivedSurface.paper,
+            surfaceWarmLight: derivedSurface.warm,
+            surfaceDeepLight: derivedSurface.deep,
+          },
+    );
   };
 
   return (
@@ -154,6 +244,62 @@ export function AppearanceSection({ config, onChange }: AppearanceSectionProps) 
                   className="h-6 w-6 cursor-pointer rounded-full border border-paper-deep/40 transition-transform hover:scale-110"
                 />
               ))}
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="space-y-2">
+        <label className="block text-[11px] font-body text-ink-faint">
+          {t("settings.surface.label", { defaultValue: "界面底色" })}
+        </label>
+        <ToggleRow
+          label={t("settings.surface.custom", { defaultValue: "自定义界面底色" })}
+          checked={surfaceEnabled}
+          onChange={toggleSurface}
+        />
+        {surfaceEnabled && (
+          <>
+            <ColorRow
+              label={t("settings.surface.paper", {
+                theme: themeName,
+                defaultValue: "{{theme}}主题 · 主背景",
+              })}
+              value={surfaceValue.paper}
+              fallback={DEFAULT_SURFACE[theme].paper}
+              onChange={(value) => setSurfaceFor("paper", value)}
+            />
+            <ColorRow
+              label={t("settings.surface.warm", {
+                theme: themeName,
+                defaultValue: "{{theme}}主题 · 控件底（搜索框/卡片行）",
+              })}
+              value={surfaceValue.warm}
+              fallback={DEFAULT_SURFACE[theme].warm}
+              onChange={(value) => setSurfaceFor("warm", value)}
+            />
+            <ColorRow
+              label={t("settings.surface.deep", {
+                theme: themeName,
+                defaultValue: "{{theme}}主题 · 分隔线与描边",
+              })}
+              value={surfaceValue.deep}
+              fallback={DEFAULT_SURFACE[theme].deep}
+              onChange={(value) => setSurfaceFor("deep", value)}
+            />
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-paper-deep/25 bg-paper-warm/45 px-2.5 py-1.5">
+              <span className="min-w-0 flex-1 text-[10px] leading-relaxed text-ink-ghost">
+                {t("settings.surface.hint", {
+                  defaultValue: "刚打开时已按你的主题色配好一套；换了主题色可以重新对齐",
+                })}
+              </span>
+              <button
+                type="button"
+                onClick={resyncSurface}
+                className="h-6 shrink-0 cursor-pointer rounded border border-paper-deep/45 px-2 text-[10px] text-ink-faint transition-colors hover:border-bamboo/40 hover:text-bamboo"
+              >
+                {t("settings.surface.resync", { defaultValue: "按主题色重算" })}
+              </button>
             </div>
           </>
         )}

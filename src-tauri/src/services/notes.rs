@@ -107,6 +107,20 @@ pub struct AppConfig {
     pub text_faint_light: String,
     #[serde(default = "default_text_faint_dark")]
     pub text_faint_dark: String,
+    #[serde(default)]
+    pub custom_surface_enabled: bool,
+    #[serde(default = "default_surface_color_light")]
+    pub surface_color_light: String,
+    #[serde(default = "default_surface_color_dark")]
+    pub surface_color_dark: String,
+    #[serde(default = "default_surface_warm_light")]
+    pub surface_warm_light: String,
+    #[serde(default = "default_surface_warm_dark")]
+    pub surface_warm_dark: String,
+    #[serde(default = "default_surface_deep_light")]
+    pub surface_deep_light: String,
+    #[serde(default = "default_surface_deep_dark")]
+    pub surface_deep_dark: String,
     #[serde(default = "default_remember_surface_size")]
     pub remember_surface_size: bool,
     #[serde(default = "default_tile_ctrl_close")]
@@ -180,6 +194,13 @@ impl Default for AppConfig {
             text_color_dark: default_text_color_dark(),
             text_faint_light: default_text_faint_light(),
             text_faint_dark: default_text_faint_dark(),
+            custom_surface_enabled: false,
+            surface_color_light: default_surface_color_light(),
+            surface_color_dark: default_surface_color_dark(),
+            surface_warm_light: default_surface_warm_light(),
+            surface_warm_dark: default_surface_warm_dark(),
+            surface_deep_light: default_surface_deep_light(),
+            surface_deep_dark: default_surface_deep_dark(),
             remember_surface_size: default_remember_surface_size(),
             tile_ctrl_close: default_tile_ctrl_close(),
             tile_double_click_to_edit: false,
@@ -1845,6 +1866,30 @@ fn default_text_faint_light() -> String {
 
 fn default_text_faint_dark() -> String {
     "#928f87".into()
+}
+
+fn default_surface_color_light() -> String {
+    "#f6f3ec".into()
+}
+
+fn default_surface_color_dark() -> String {
+    "#222120".into()
+}
+
+fn default_surface_warm_light() -> String {
+    "#f0ebe0".into()
+}
+
+fn default_surface_warm_dark() -> String {
+    "#2c2a27".into()
+}
+
+fn default_surface_deep_light() -> String {
+    "#e8e1d3".into()
+}
+
+fn default_surface_deep_dark() -> String {
+    "#3c3935".into()
 }
 
 fn default_remember_surface_size() -> bool {

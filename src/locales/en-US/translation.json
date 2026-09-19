@@ -449,6 +449,15 @@
       "custom": "Custom accent color",
       "current": "{{theme}} theme color"
     },
+    "surface": {
+      "label": "Interface base",
+      "custom": "Custom interface base color",
+      "paper": "{{theme}} theme · Main background",
+      "warm": "{{theme}} theme · Control surface (search box / card row)",
+      "deep": "{{theme}} theme · Dividers and borders",
+      "hint": "A matching set was derived from your accent color when this was enabled; re-sync after changing the accent.",
+      "resync": "Re-sync with accent"
+    },
     "textColor": {
       "label": "Text color",
       "custom": "Custom text color",

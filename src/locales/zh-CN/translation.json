@@ -449,6 +449,15 @@
       "custom": "自定义主题色",
       "current": "{{theme}}主题用色"
     },
+    "surface": {
+      "label": "界面底色",
+      "custom": "自定义界面底色",
+      "paper": "{{theme}}主题 · 主背景",
+      "warm": "{{theme}}主题 · 控件底（搜索框/卡片行）",
+      "deep": "{{theme}}主题 · 分隔线与描边",
+      "hint": "刚打开时已按你的主题色配好一套；换了主题色可以重新对齐",
+      "resync": "按主题色重算"
+    },
     "textColor": {
       "label": "文字颜色",
       "custom": "自定义文字颜色",
