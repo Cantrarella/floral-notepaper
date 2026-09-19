@@ -442,9 +442,6 @@ const TRAY_MENU_OPENED_EVENT: &str = "tray-menu-opened";
 const TRAY_MENU_WIDTH: f64 = 224.0;
 #[cfg(not(target_os = "macos"))]
 const TRAY_MENU_HEIGHT: f64 = 199.0;
-/// 窗口四周多留的透明边距，用来承载 CSS 投影（无边框窗会把溢出部分裁掉）
-#[cfg(not(target_os = "macos"))]
-const TRAY_MENU_SHADOW_MARGIN: f64 = 8.0;
 /// 菜单因失焦收起后，这个时间窗内忽略新的弹出请求——否则点托盘右键想收起
 /// 菜单时，失焦收起与随后的 WM_RBUTTONUP 会前后脚到达，菜单又弹回来
 #[cfg(not(target_os = "macos"))]
@@ -1063,10 +1060,7 @@ fn create_tray_menu_window(app: &AppHandle) -> Result<tauri::WebviewWindow, AppE
         WebviewUrl::App("index.html?view=tray-menu".into()),
     )
     .title(String::new())
-    .inner_size(
-        TRAY_MENU_WIDTH + TRAY_MENU_SHADOW_MARGIN * 2.0,
-        TRAY_MENU_HEIGHT + TRAY_MENU_SHADOW_MARGIN * 2.0,
-    )
+    .inner_size(TRAY_MENU_WIDTH, TRAY_MENU_HEIGHT)
     .resizable(false)
     .maximizable(false)
     .minimizable(false)
@@ -1113,8 +1107,8 @@ fn tray_menu_placement(app: &AppHandle, icon: TrayIconBox) -> (i32, i32, u32, u3
         )
     });
 
-    let width = ((TRAY_MENU_WIDTH + TRAY_MENU_SHADOW_MARGIN * 2.0) * scale).round() as i32;
-    let height = ((TRAY_MENU_HEIGHT + TRAY_MENU_SHADOW_MARGIN * 2.0) * scale).round() as i32;
+    let width = (TRAY_MENU_WIDTH * scale).round() as i32;
+    let height = (TRAY_MENU_HEIGHT * scale).round() as i32;
     let icon_right = icon.left + icon.width;
     let icon_bottom = icon.top + icon.height;
 

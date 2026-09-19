@@ -115,11 +115,11 @@ export function TrayMenu() {
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden p-2">
+    <div className="h-screen w-screen overflow-hidden">
       <div
         role="menu"
         aria-orientation="vertical"
-        className="flex w-[224px] flex-col rounded-[10px] bg-paper py-[10px] shadow-[0_10px_28px_rgba(26,26,24,0.16),0_2px_6px_rgba(26,26,24,0.08)] ring-1 ring-black/5"
+        className="flex w-[224px] flex-col rounded-[10px] bg-paper py-[10px] ring-1 ring-black/5"
       >
         {entries.map((entry, index) =>
           entry.kind === "separator" ? (
