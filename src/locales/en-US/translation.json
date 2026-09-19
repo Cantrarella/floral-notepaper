@@ -423,7 +423,7 @@
     },
     "visibilityShortcut": "Show/Hide window shortcut",
     "background": {
-      "label": "Background image",
+      "label": "Background",
       "default": "Default background",
       "choose": "Choose",
       "clear": "Clear background image",
@@ -436,7 +436,38 @@
         "cover": "Cover",
         "contain": "Contain",
         "repeat": "Repeat"
-      }
+      },
+      "mode": {
+        "image": "Image",
+        "gradient": "Gradient",
+        "color": "Solid"
+      },
+      "colorLabel": "Background color"
+    },
+    "accent": {
+      "label": "Accent color",
+      "custom": "Custom accent color",
+      "current": "{{theme}} theme color"
+    },
+    "textColor": {
+      "label": "Text color",
+      "custom": "Custom text color",
+      "primary": "{{theme}} theme · Body text",
+      "faint": "{{theme}} theme · Muted (icons)",
+      "contrast": "Contrast against paper",
+      "boost": "Boost muted",
+      "ink": "Body",
+      "soft": "Soft",
+      "faintLabel": "Muted",
+      "ghost": "Icons",
+      "hint": "4.5:1 or above reads clearly; icons below 3:1 are effectively invisible"
+    },
+    "gradient": {
+      "linear": "Linear",
+      "radial": "Radial",
+      "angle": "Angle",
+      "addStop": "+ Add stop",
+      "dim": "Overlay"
     }
   },
   "tile": {

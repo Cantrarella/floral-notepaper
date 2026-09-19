@@ -14,6 +14,22 @@
           t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
         }
         document.documentElement.setAttribute("data-theme", t);
+
+        // 自定义主题色/文字色：套用上次算好的变量，避免首屏闪一下内置配色。
+        // App 挂载后会重新计算并覆盖，这里只求"第一帧不闪"。
+        try {
+          var cached = JSON.parse(localStorage.getItem("appearance-vars") || "null");
+          var vars = cached && cached[t];
+          if (vars) {
+            for (var name in vars) {
+              if (Object.prototype.hasOwnProperty.call(vars, name)) {
+                document.documentElement.style.setProperty(name, vars[name]);
+              }
+            }
+          }
+        } catch (error) {
+          /* 缓存损坏就忽略，App 挂载后会重算 */
+        }
       })();
     </script>
     <style>

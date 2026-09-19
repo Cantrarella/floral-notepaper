@@ -6,6 +6,7 @@ import { UpdateSettingsSection } from "../features/update/UpdateSettingsSection"
 import type {
   AppConfig,
   BackgroundFit,
+  BackgroundMode,
   ThemeOption,
   TileColorMode,
   ViewMode,
@@ -20,6 +21,10 @@ import { useShortcutRecorder } from "../features/settings/useShortcutRecorder";
 import { DEFAULT_TILE_COLOR, normalizeTileColor } from "../features/settings/tileColor";
 import { applyTheme, watchSystemTheme } from "../features/settings/theme";
 import { LOCALE_OPTIONS } from "../locales/locale-whitelist";
+import { AppearanceSection } from "./AppearanceSection";
+import { ColorRow } from "./ColorRow";
+import { GradientEditor } from "./GradientEditor";
+import { RangeRow, ToggleRow } from "./SettingsRows";
 import { SlidingButtonGroup } from "./SlidingButtonGroup";
 
 const HARMONY_FONT_LICENSE_URL = new URL("../assets/fonts/LICENSE_Fonts", import.meta.url).href;
@@ -79,6 +84,18 @@ export function SettingsPanel({ config, onChange, onMigrateDataDir, onClose }: S
     ],
     [t],
   );
+  const backgroundModes = useMemo<Array<{ value: BackgroundMode; label: string }>>(
+    () => [
+      { value: "image", label: t("settings.background.mode.image", { defaultValue: "图片" }) },
+      {
+        value: "gradient",
+        label: t("settings.background.mode.gradient", { defaultValue: "渐变" }),
+      },
+      { value: "color", label: t("settings.background.mode.color", { defaultValue: "纯色" }) },
+    ],
+    [t],
+  );
+  const backgroundMode = config.backgroundMode ?? "image";
   const localeOptions = useMemo(
     () =>
       LOCALE_OPTIONS.map(({ value, labelKey, defaultLabel }) => ({
@@ -129,6 +146,8 @@ export function SettingsPanel({ config, onChange, onMigrateDataDir, onClose }: S
             }}
           />
         </section>
+
+        <AppearanceSection config={config} onChange={onChange} />
 
         <section className="space-y-2">
           <label className="block text-[11px] font-body text-ink-faint">
@@ -350,100 +369,118 @@ export function SettingsPanel({ config, onChange, onMigrateDataDir, onClose }: S
 
         <section className="space-y-2">
           <label className="block text-[11px] font-body text-ink-faint">
-            {t("settings.background.label", { defaultValue: "背景图片" })}
+            {t("settings.background.label", { defaultValue: "背景" })}
           </label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={
-                (config.backgroundImagePath &&
-                  (localStorage.getItem("backgroundImageName") ||
-                    config.backgroundImagePath.split(/[/\\]/).pop())) ||
-                t("settings.background.default", { defaultValue: "默认背景" })
-              }
-              readOnly
-              className="min-w-0 flex-1 h-8 px-2.5 rounded-lg bg-paper-warm/70 border border-paper-deep/40 text-[11px] font-mono text-ink-faint truncate"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                void chooseBackgroundImage().then(async (path) => {
-                  if (!path) return;
-                  const originalName = path.split(/[/\\]/).pop() ?? "";
-                  const saved = await invoke<string>("copy_background_image", {
-                    sourcePath: path,
-                  });
-                  localStorage.setItem("backgroundImageName", originalName);
-                  setConfigValue("backgroundImagePath", saved);
-                });
-              }}
-              className="h-8 px-3 rounded-lg border border-paper-deep/45 text-[11px] text-ink-faint hover:text-bamboo hover:bg-bamboo-mist/50 transition-colors cursor-pointer"
-            >
-              {t("settings.background.choose", { defaultValue: "选择" })}
-            </button>
-            {config.backgroundImagePath && (
-              <button
-                type="button"
-                onClick={() => {
-                  localStorage.removeItem("backgroundImageName");
-                  setConfigValue("backgroundImagePath", "");
-                }}
-                className="h-8 px-3 rounded-lg border border-red-400/40 text-[11px] text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
-              >
-                {t("settings.background.clear", { defaultValue: "清除" })}
-              </button>
-            )}
-          </div>
           <SlidingButtonGroup
-            options={backgroundFits}
-            value={config.backgroundFit ?? "cover"}
-            onChange={(value: BackgroundFit) => setConfigValue("backgroundFit", value)}
+            options={backgroundModes}
+            value={backgroundMode}
+            onChange={(value: BackgroundMode) => setConfigValue("backgroundMode", value)}
           />
-          <RangeRow
-            label={t("settings.background.dim", { defaultValue: "遮罩" })}
-            value={config.backgroundDim ?? 0.25}
-            min={0}
-            max={1}
-            step={0.01}
-            format={(value) => `${Math.round(value * 100)}%`}
-            onChange={(value) => setConfigValue("backgroundDim", value)}
-          />
-          <RangeRow
-            label={t("settings.background.scale", { defaultValue: "缩放" })}
-            value={config.backgroundScale ?? 1}
-            min={0.5}
-            max={2}
-            step={0.05}
-            format={(value) => `${Math.round(value * 100)}%`}
-            onChange={(value) => setConfigValue("backgroundScale", value)}
-          />
-          <RangeRow
-            label={t("settings.background.positionX", { defaultValue: "横向" })}
-            value={config.backgroundPositionX ?? 50}
-            min={0}
-            max={100}
-            step={1}
-            format={(value) => `${value}%`}
-            onChange={(value) => setConfigValue("backgroundPositionX", value)}
-          />
-          <RangeRow
-            label={t("settings.background.positionY", { defaultValue: "纵向" })}
-            value={config.backgroundPositionY ?? 50}
-            min={0}
-            max={100}
-            step={1}
-            format={(value) => `${value}%`}
-            onChange={(value) => setConfigValue("backgroundPositionY", value)}
-          />
-          <RangeRow
-            label={t("settings.background.blur", { defaultValue: "模糊" })}
-            value={config.backgroundBlur ?? 0}
-            min={0}
-            max={20}
-            step={1}
-            format={(value) => `${value}px`}
-            onChange={(value) => setConfigValue("backgroundBlur", value)}
-          />
+          {backgroundMode === "gradient" ? (
+            <GradientEditor config={config} onChange={onChange} />
+          ) : backgroundMode === "color" ? (
+            <ColorRow
+              label={t("settings.background.colorLabel", { defaultValue: "背景颜色" })}
+              value={config.backgroundColor ?? "#f5f2ea"}
+              fallback="#f5f2ea"
+              onChange={(value) => setConfigValue("backgroundColor", value)}
+            />
+          ) : (
+            <>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={
+                    (config.backgroundImagePath &&
+                      (localStorage.getItem("backgroundImageName") ||
+                        config.backgroundImagePath.split(/[/\\]/).pop())) ||
+                    t("settings.background.default", { defaultValue: "默认背景" })
+                  }
+                  readOnly
+                  className="min-w-0 flex-1 h-8 px-2.5 rounded-lg bg-paper-warm/70 border border-paper-deep/40 text-[11px] font-mono text-ink-faint truncate"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    void chooseBackgroundImage().then(async (path) => {
+                      if (!path) return;
+                      const originalName = path.split(/[/\\]/).pop() ?? "";
+                      const saved = await invoke<string>("copy_background_image", {
+                        sourcePath: path,
+                      });
+                      localStorage.setItem("backgroundImageName", originalName);
+                      setConfigValue("backgroundImagePath", saved);
+                    });
+                  }}
+                  className="h-8 px-3 rounded-lg border border-paper-deep/45 text-[11px] text-ink-faint hover:text-bamboo hover:bg-bamboo-mist/50 transition-colors cursor-pointer"
+                >
+                  {t("settings.background.choose", { defaultValue: "选择" })}
+                </button>
+                {config.backgroundImagePath && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.removeItem("backgroundImageName");
+                      setConfigValue("backgroundImagePath", "");
+                    }}
+                    className="h-8 px-3 rounded-lg border border-red-400/40 text-[11px] text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
+                  >
+                    {t("settings.background.clear", { defaultValue: "清除" })}
+                  </button>
+                )}
+              </div>
+              <SlidingButtonGroup
+                options={backgroundFits}
+                value={config.backgroundFit ?? "cover"}
+                onChange={(value: BackgroundFit) => setConfigValue("backgroundFit", value)}
+              />
+              <RangeRow
+                label={t("settings.background.dim", { defaultValue: "遮罩" })}
+                value={config.backgroundDim ?? 0.25}
+                min={0}
+                max={1}
+                step={0.01}
+                format={(value) => `${Math.round(value * 100)}%`}
+                onChange={(value) => setConfigValue("backgroundDim", value)}
+              />
+              <RangeRow
+                label={t("settings.background.scale", { defaultValue: "缩放" })}
+                value={config.backgroundScale ?? 1}
+                min={0.5}
+                max={2}
+                step={0.05}
+                format={(value) => `${Math.round(value * 100)}%`}
+                onChange={(value) => setConfigValue("backgroundScale", value)}
+              />
+              <RangeRow
+                label={t("settings.background.positionX", { defaultValue: "横向" })}
+                value={config.backgroundPositionX ?? 50}
+                min={0}
+                max={100}
+                step={1}
+                format={(value) => `${value}%`}
+                onChange={(value) => setConfigValue("backgroundPositionX", value)}
+              />
+              <RangeRow
+                label={t("settings.background.positionY", { defaultValue: "纵向" })}
+                value={config.backgroundPositionY ?? 50}
+                min={0}
+                max={100}
+                step={1}
+                format={(value) => `${value}%`}
+                onChange={(value) => setConfigValue("backgroundPositionY", value)}
+              />
+              <RangeRow
+                label={t("settings.background.blur", { defaultValue: "模糊" })}
+                value={config.backgroundBlur ?? 0}
+                min={0}
+                max={20}
+                step={1}
+                format={(value) => `${value}px`}
+                onChange={(value) => setConfigValue("backgroundBlur", value)}
+              />
+            </>
+          )}
         </section>
 
         <section className="space-y-2">
@@ -479,67 +516,6 @@ export function SettingsPanel({ config, onChange, onMigrateDataDir, onClose }: S
         </section>
       </div>
     </aside>
-  );
-}
-
-interface ToggleRowProps {
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}
-
-function ToggleRow({ label, checked, onChange }: ToggleRowProps) {
-  return (
-    <label className="flex items-center justify-between h-9 rounded-lg px-2.5 bg-paper-warm/45 border border-paper-deep/25 cursor-pointer">
-      <span className="text-[12px] text-ink-soft">{label}</span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="sr-only"
-      />
-      <div
-        className={`relative w-8 h-[18px] rounded-full transition-colors duration-250 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-          checked ? "bg-bamboo" : "bg-paper-deep/50"
-        }`}
-      >
-        <div
-          className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.15)] transition-transform duration-250 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-            checked ? "translate-x-[14px]" : "translate-x-0"
-          }`}
-        />
-      </div>
-    </label>
-  );
-}
-
-interface RangeRowProps {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  format: (value: number) => string;
-  onChange: (value: number) => void;
-}
-
-function RangeRow({ label, value, min, max, step, format, onChange }: RangeRowProps) {
-  return (
-    <div className="flex items-center gap-3 h-9 rounded-lg px-2.5 bg-paper-warm/45 border border-paper-deep/25">
-      <span className="w-9 text-[11px] text-ink-faint">{label}</span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="flex-1 h-1 accent-bamboo cursor-pointer appearance-none bg-transparent [&::-webkit-slider-runnable-track]:h-[3px] [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-paper-deep/50 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-bamboo [&::-webkit-slider-thumb]:-mt-[4.5px] [&::-webkit-slider-thumb]:shadow-[0_1px_3px_rgba(0,0,0,0.15)]"
-      />
-      <span className="w-10 text-right text-[11px] font-mono text-ink-soft tabular-nums">
-        {format(value)}
-      </span>
-    </div>
   );
 }
 

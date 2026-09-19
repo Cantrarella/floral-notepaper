@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import "./App.css";
 import { ContextMenuProvider } from "./components/ContextMenu";
 import { MainWindow } from "./components/MainWindow";
@@ -7,6 +7,7 @@ import { TileShowcase } from "./components/TileShowcase";
 import { ToastContainer } from "./components/Toast";
 import { tabToIndentListener } from "indent-textarea";
 import { getConfig } from "./features/settings/api";
+import { applyAppearance } from "./features/settings/appearance";
 import { applyTheme, watchSystemTheme } from "./features/settings/theme";
 import type { AppConfig, ThemeOption } from "./features/settings/types";
 import { getInitialRoute } from "./features/windows/windowRoutes";
@@ -16,6 +17,13 @@ import { listen } from "@tauri-apps/api/event";
 function App() {
   const route = getInitialRoute();
   const activeView = route.view;
+  // 主题切换（含"跟随系统")时要用最新配置重刷配色，这里留一份引用
+  const appearanceConfig = useRef<AppConfig | null>(null);
+
+  const syncAppearance = (config: AppConfig) => {
+    appearanceConfig.current = config;
+    applyAppearance(config);
+  };
 
   useEffect(() => {
     let cleanup = () => {};
@@ -24,6 +32,7 @@ function App() {
         const theme = (config.theme || "system") as ThemeOption;
         applyTheme(theme);
         cleanup = watchSystemTheme(theme);
+        syncAppearance(config);
         document.documentElement.style.setProperty(
           "--tab-indent-size",
           String(config.tabIndentSize ?? 2),
@@ -41,6 +50,7 @@ function App() {
       applyTheme(theme);
       themeCleanup();
       themeCleanup = watchSystemTheme(theme);
+      syncAppearance(event.payload);
       document.documentElement.style.setProperty(
         "--tab-indent-size",
         String(event.payload.tabIndentSize ?? 2),
@@ -51,6 +61,20 @@ function App() {
       themeCleanup();
       void unlisten.then((fn) => fn());
     };
+  }, []);
+
+  // data-theme 变化（手动切主题 / 系统明暗变化）后重新套用自定义配色，
+  // 否则深色主题会继续沿用上一套主题的 inline 覆盖值
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      const config = appearanceConfig.current;
+      if (config) applyAppearance(config);
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {

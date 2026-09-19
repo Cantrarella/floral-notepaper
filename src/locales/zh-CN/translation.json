@@ -423,7 +423,7 @@
     },
     "visibilityShortcut": "显示/隐藏窗口快捷键",
     "background": {
-      "label": "背景图片",
+      "label": "背景",
       "default": "默认背景",
       "choose": "选择",
       "clear": "清除背景图片",
@@ -436,7 +436,38 @@
         "cover": "填充",
         "contain": "完整",
         "repeat": "平铺"
-      }
+      },
+      "mode": {
+        "image": "图片",
+        "gradient": "渐变",
+        "color": "纯色"
+      },
+      "colorLabel": "背景颜色"
+    },
+    "accent": {
+      "label": "主题色",
+      "custom": "自定义主题色",
+      "current": "{{theme}}主题用色"
+    },
+    "textColor": {
+      "label": "文字颜色",
+      "custom": "自定义文字颜色",
+      "primary": "{{theme}}主题 · 正文色",
+      "faint": "{{theme}}主题 · 淡色（图标/次要）",
+      "contrast": "对底色的对比度",
+      "boost": "一键增强淡色",
+      "ink": "正文",
+      "soft": "次级",
+      "faintLabel": "淡色",
+      "ghost": "图标",
+      "hint": "达到 4.5:1 才算清晰；图标档低于 3:1 基本等于隐形"
+    },
+    "gradient": {
+      "linear": "线性",
+      "radial": "径向",
+      "angle": "角度",
+      "addStop": "+ 添加色标",
+      "dim": "遮罩"
     }
   },
   "tile": {

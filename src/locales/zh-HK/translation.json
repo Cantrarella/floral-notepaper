@@ -404,7 +404,7 @@
     },
     "visibilityShortcut": "顯示／隱藏視窗快捷鍵",
     "background": {
-      "label": "背景圖片",
+      "label": "背景",
       "default": "預設背景",
       "choose": "選擇",
       "clear": "清除背景圖片",
@@ -417,7 +417,38 @@
         "cover": "填充",
         "contain": "完整",
         "repeat": "平鋪"
-      }
+      },
+      "mode": {
+        "image": "圖片",
+        "gradient": "漸變",
+        "color": "純色"
+      },
+      "colorLabel": "背景顏色"
+    },
+    "accent": {
+      "label": "主題色",
+      "custom": "自訂主題色",
+      "current": "{{theme}}主題用色"
+    },
+    "textColor": {
+      "label": "文字顏色",
+      "custom": "自訂文字顏色",
+      "primary": "{{theme}}主題 · 正文色",
+      "faint": "{{theme}}主題 · 淡色（圖示/次要）",
+      "contrast": "對底色的對比度",
+      "boost": "一鍵增強淡色",
+      "ink": "正文",
+      "soft": "次級",
+      "faintLabel": "淡色",
+      "ghost": "圖示",
+      "hint": "達到 4.5:1 才算清晰；圖示檔低於 3:1 基本等於隱形"
+    },
+    "gradient": {
+      "linear": "線性",
+      "radial": "徑向",
+      "angle": "角度",
+      "addStop": "+ 加入色標",
+      "dim": "遮罩"
     }
   },
   "tile": {

@@ -20,6 +20,14 @@ const LEGACY_MACOS_GLOBAL_SHORTCUTS: [&str; 5] = [
 ];
 const MACOS_SHORTCUT_MIGRATION_MARKER: &str = ".macos-shortcut-default-v3";
 
+/// 背景渐变的一个色标
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GradientStop {
+    pub color: String,
+    pub position: f64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
@@ -66,6 +74,39 @@ pub struct AppConfig {
     pub background_position_x: f64,
     #[serde(default = "default_background_position")]
     pub background_position_y: f64,
+    // ===== 自定义外观（本 fork 新增）=====
+    // 背景类型：image（沿用图片）/ gradient（纯渐变）/ color（纯色）
+    #[serde(default = "default_background_mode")]
+    pub background_mode: String,
+    // 纯色背景色号，空串=未设置
+    #[serde(default)]
+    pub background_color: String,
+    #[serde(default = "default_gradient_type")]
+    pub gradient_type: String,
+    // CSS 线性渐变角度：0=向上，90=向右
+    #[serde(default = "default_gradient_angle")]
+    pub gradient_angle: f64,
+    #[serde(default = "default_gradient_stops")]
+    pub gradient_stops: Vec<GradientStop>,
+    // 渐变独立遮罩，默认 0——沿用图片的 0.25 会把渐变冲淡
+    #[serde(default = "default_gradient_dim")]
+    pub gradient_dim: f64,
+    #[serde(default)]
+    pub custom_accent_enabled: bool,
+    #[serde(default = "default_accent_color_light")]
+    pub accent_color_light: String,
+    #[serde(default = "default_accent_color_dark")]
+    pub accent_color_dark: String,
+    #[serde(default)]
+    pub custom_text_color_enabled: bool,
+    #[serde(default = "default_text_color_light")]
+    pub text_color_light: String,
+    #[serde(default = "default_text_color_dark")]
+    pub text_color_dark: String,
+    #[serde(default = "default_text_faint_light")]
+    pub text_faint_light: String,
+    #[serde(default = "default_text_faint_dark")]
+    pub text_faint_dark: String,
     #[serde(default = "default_remember_surface_size")]
     pub remember_surface_size: bool,
     #[serde(default = "default_tile_ctrl_close")]
@@ -93,6 +134,67 @@ pub struct AppConfig {
     pub notes_dir: Option<String>,
     #[serde(default, skip_serializing)]
     pub last_known_base_dir: Option<String>,
+}
+
+/// 手写 Default 而非 derive：字段的缺省值分散在 default_xxx 函数里（部分依赖平台），
+/// 集中一份实现后，构造点就能用 `..Default::default()`，以后加字段不用逐个改。
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            locale: default_locale(),
+            data_dir: None,
+            #[cfg(target_os = "macos")]
+            global_shortcut: DEFAULT_MACOS_GLOBAL_SHORTCUT.into(),
+            #[cfg(not(target_os = "macos"))]
+            global_shortcut: "Ctrl+Space".into(),
+            close_to_tray: true,
+            autostart: false,
+            default_view_mode: "split".into(),
+            note_auto_save: default_note_auto_save(),
+            note_surface_auto_save: default_note_surface_auto_save(),
+            tile_color: default_tile_color(),
+            tile_color_mode: default_tile_color_mode(),
+            theme: default_theme(),
+            font_size: default_font_size(),
+            surface_font_size: default_surface_font_size(),
+            tab_indent_size: default_tab_indent_size(),
+            external_file_auto_save: default_external_file_auto_save(),
+            background_image_path: String::new(),
+            background_fit: default_background_fit(),
+            background_dim: default_background_dim(),
+            background_blur: default_background_blur(),
+            background_scale: default_background_scale(),
+            background_position_x: default_background_position(),
+            background_position_y: default_background_position(),
+            background_mode: default_background_mode(),
+            background_color: String::new(),
+            gradient_type: default_gradient_type(),
+            gradient_angle: default_gradient_angle(),
+            gradient_stops: default_gradient_stops(),
+            gradient_dim: default_gradient_dim(),
+            custom_accent_enabled: false,
+            accent_color_light: default_accent_color_light(),
+            accent_color_dark: default_accent_color_dark(),
+            custom_text_color_enabled: false,
+            text_color_light: default_text_color_light(),
+            text_color_dark: default_text_color_dark(),
+            text_faint_light: default_text_faint_light(),
+            text_faint_dark: default_text_faint_dark(),
+            remember_surface_size: default_remember_surface_size(),
+            tile_ctrl_close: default_tile_ctrl_close(),
+            tile_double_click_to_edit: false,
+            tile_save_returns_to_pin: false,
+            tile_render_markdown: false,
+            render_html_markdown: false,
+            split_scroll_sync: default_split_scroll_sync(),
+            surface_width: None,
+            surface_height: None,
+            toggle_visibility_shortcut: default_toggle_visibility_shortcut(),
+            open_at_cursor: default_open_at_cursor(),
+            notes_dir: None,
+            last_known_base_dir: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1127,44 +1229,8 @@ impl NoteStore {
 
     fn default_config(&self) -> AppConfig {
         AppConfig {
-            locale: default_locale(),
             data_dir: Some(self.data_dir.to_string_lossy().to_string()),
-            #[cfg(target_os = "macos")]
-            global_shortcut: DEFAULT_MACOS_GLOBAL_SHORTCUT.into(),
-            #[cfg(not(target_os = "macos"))]
-            global_shortcut: "Ctrl+Space".into(),
-            close_to_tray: true,
-            autostart: false,
-            default_view_mode: "split".into(),
-            note_auto_save: true,
-            note_surface_auto_save: true,
-            tile_color: default_tile_color(),
-            tile_color_mode: default_tile_color_mode(),
-            theme: default_theme(),
-            font_size: default_font_size(),
-            surface_font_size: default_surface_font_size(),
-            tab_indent_size: default_tab_indent_size(),
-            external_file_auto_save: default_external_file_auto_save(),
-            background_image_path: String::new(),
-            background_fit: default_background_fit(),
-            background_dim: default_background_dim(),
-            background_blur: default_background_blur(),
-            background_scale: default_background_scale(),
-            background_position_x: default_background_position(),
-            background_position_y: default_background_position(),
-            remember_surface_size: default_remember_surface_size(),
-            tile_ctrl_close: default_tile_ctrl_close(),
-            tile_double_click_to_edit: false,
-            tile_save_returns_to_pin: false,
-            tile_render_markdown: false,
-            render_html_markdown: false,
-            split_scroll_sync: true,
-            surface_width: None,
-            surface_height: None,
-            toggle_visibility_shortcut: default_toggle_visibility_shortcut(),
-            open_at_cursor: default_open_at_cursor(),
-            notes_dir: None,
-            last_known_base_dir: None,
+            ..Default::default()
         }
     }
 
@@ -1728,6 +1794,59 @@ fn default_background_position() -> f64 {
     50.0
 }
 
+fn default_background_mode() -> String {
+    "image".into()
+}
+
+fn default_gradient_type() -> String {
+    "linear".into()
+}
+
+fn default_gradient_angle() -> f64 {
+    90.0
+}
+
+fn default_gradient_stops() -> Vec<GradientStop> {
+    vec![
+        GradientStop {
+            color: "#e6f7ff".into(),
+            position: 0.0,
+        },
+        GradientStop {
+            color: "#89c2ff".into(),
+            position: 100.0,
+        },
+    ]
+}
+
+fn default_gradient_dim() -> f64 {
+    0.0
+}
+
+fn default_accent_color_light() -> String {
+    "#2d5a3d".into()
+}
+
+fn default_accent_color_dark() -> String {
+    "#4faa70".into()
+}
+
+fn default_text_color_light() -> String {
+    "#1a1a18".into()
+}
+
+fn default_text_color_dark() -> String {
+    "#e5e1da".into()
+}
+
+fn default_text_faint_light() -> String {
+    "#8a8a80".into()
+}
+
+fn default_text_faint_dark() -> String {
+    "#928f87".into()
+}
+
 fn default_remember_surface_size() -> bool {
     true
 }
@@ -1924,9 +2043,8 @@ mod tests {
             surface_width: None,
             surface_height: None,
             toggle_visibility_shortcut: String::new(),
-            notes_dir: None,
-            last_known_base_dir: None,
             open_at_cursor: true,
+            ..Default::default()
         };
 
         store.save_config(saved.clone()).expect("save config");

@@ -2599,8 +2599,7 @@ mod tests {
             surface_width: None,
             surface_height: None,
             toggle_visibility_shortcut: toggle_visibility_shortcut.into(),
-            notes_dir: None,
-            last_known_base_dir: None,
+            ..Default::default()
         }
     }
 
@@ -2684,8 +2683,7 @@ mod tests {
             surface_width: None,
             surface_height: None,
             toggle_visibility_shortcut: String::new(),
-            notes_dir: None,
-            last_known_base_dir: None,
+            ..Default::default()
         };
         let next = AppConfig {
             locale: "en-US".into(),
@@ -2721,8 +2719,7 @@ mod tests {
             surface_width: None,
             surface_height: None,
             toggle_visibility_shortcut: "Ctrl+Shift+H".into(),
-            notes_dir: None,
-            last_known_base_dir: None,
+            ..Default::default()
         };
 
         assert_eq!(
