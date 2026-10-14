@@ -425,7 +425,6 @@ const TRAY_ID: &str = "main-tray";
 const TRAY_SHOW_MAIN_ID: &str = "show-main";
 const TRAY_QUICK_NOTE_ID: &str = "quick-note";
 const TRAY_TOGGLE_CLOSE_TO_TRAY_ID: &str = "toggle-close-to-tray";
-const TRAY_TOGGLE_AUTOSTART_ID: &str = "toggle-autostart";
 const TRAY_QUIT_ID: &str = "quit";
 
 /// 自绘托盘菜单的窗口标签（Windows / Linux 专用）。
@@ -437,11 +436,11 @@ const TRAY_MENU_WINDOW_LABEL: &str = "tray-menu";
 const TRAY_MENU_OPENED_EVENT: &str = "tray-menu-opened";
 
 /// 自绘菜单的版面尺寸（逻辑像素），与 `src/components/TrayMenu.tsx` 的
-/// 内边距、行高保持一致：6 + 28×5 + 7 + 6 = 159，宽 190。
+/// 内边距、行高保持一致：6 + 28×4 + 7 + 6 = 131，宽 150。
 #[cfg(not(target_os = "macos"))]
-const TRAY_MENU_WIDTH: f64 = 190.0;
+const TRAY_MENU_WIDTH: f64 = 150.0;
 #[cfg(not(target_os = "macos"))]
-const TRAY_MENU_HEIGHT: f64 = 159.0;
+const TRAY_MENU_HEIGHT: f64 = 131.0;
 /// 菜单因失焦收起后，这个时间窗内忽略新的弹出请求——否则点托盘右键想收起
 /// 菜单时，失焦收起与随后的 WM_RBUTTONUP 会前后脚到达，菜单又弹回来
 #[cfg(not(target_os = "macos"))]
@@ -465,7 +464,6 @@ pub enum TrayMenuAction {
     ShowMain,
     QuickNote,
     ToggleCloseToTray,
-    ToggleAutostart,
     Quit,
 }
 
@@ -699,7 +697,6 @@ pub fn tray_menu_action(id: &str) -> Option<TrayMenuAction> {
         TRAY_SHOW_MAIN_ID => Some(TrayMenuAction::ShowMain),
         TRAY_QUICK_NOTE_ID => Some(TrayMenuAction::QuickNote),
         TRAY_TOGGLE_CLOSE_TO_TRAY_ID => Some(TrayMenuAction::ToggleCloseToTray),
-        TRAY_TOGGLE_AUTOSTART_ID => Some(TrayMenuAction::ToggleAutostart),
         TRAY_QUIT_ID => Some(TrayMenuAction::Quit),
         _ => None,
     }
@@ -712,7 +709,7 @@ fn app_menu_action(id: &str) -> Option<AppMenuAction> {
     }
 }
 
-pub fn tray_menu_specs(locale: Locale, close_to_tray: bool, autostart: bool) -> Vec<TrayMenuSpec> {
+pub fn tray_menu_specs(locale: Locale, close_to_tray: bool) -> Vec<TrayMenuSpec> {
     vec![
         TrayMenuSpec {
             id: TRAY_SHOW_MAIN_ID,
@@ -728,11 +725,6 @@ pub fn tray_menu_specs(locale: Locale, close_to_tray: bool, autostart: bool) -> 
             id: TRAY_TOGGLE_CLOSE_TO_TRAY_ID,
             label: locales::tray_toggle_close_to_tray_label(locale),
             checked: Some(close_to_tray),
-        },
-        TrayMenuSpec {
-            id: TRAY_TOGGLE_AUTOSTART_ID,
-            label: locales::tray_toggle_autostart_label(locale),
-            checked: Some(autostart),
         },
         TrayMenuSpec {
             id: TRAY_QUIT_ID,
@@ -758,8 +750,7 @@ pub struct TrayMenuEntry {
 pub fn tray_menu_entries(app: &AppHandle) -> Result<Vec<TrayMenuEntry>, AppError> {
     let config = load_config()?;
     let locale = locale_from_config(&config);
-    let autostart = autostart_enabled(app, config.autostart);
-    let specs = tray_menu_specs(locale, config.close_to_tray, autostart);
+    let specs = tray_menu_specs(locale, config.close_to_tray);
 
     let mut entries = Vec::with_capacity(specs.len() + 1);
     let last = specs.len().saturating_sub(1);
@@ -804,8 +795,7 @@ fn configured_locale() -> Locale {
 #[cfg(target_os = "macos")]
 fn build_tray_menu(app: &AppHandle, config: &AppConfig) -> Result<Menu<Wry>, Box<dyn Error>> {
     let locale = locale_from_config(config);
-    let autostart = autostart_enabled(app, config.autostart);
-    let specs = tray_menu_specs(locale, config.close_to_tray, autostart);
+    let specs = tray_menu_specs(locale, config.close_to_tray);
 
     let show_main = MenuItem::with_id(app, specs[0].id, specs[0].label, true, None::<&str>)?;
     let quick_note = MenuItem::with_id(app, specs[1].id, specs[1].label, true, None::<&str>)?;
@@ -817,27 +807,12 @@ fn build_tray_menu(app: &AppHandle, config: &AppConfig) -> Result<Menu<Wry>, Box
         specs[2].checked.unwrap_or(false),
         None::<&str>,
     )?;
-    let autostart = CheckMenuItem::with_id(
-        app,
-        specs[3].id,
-        specs[3].label,
-        true,
-        specs[3].checked.unwrap_or(false),
-        None::<&str>,
-    )?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, specs[4].id, specs[4].label, true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, specs[3].id, specs[3].label, true, None::<&str>)?;
 
     Ok(Menu::with_items(
         app,
-        &[
-            &show_main,
-            &quick_note,
-            &close_to_tray,
-            &autostart,
-            &separator,
-            &quit,
-        ],
+        &[&show_main, &quick_note, &close_to_tray, &separator, &quit],
     )?)
 }
 
@@ -1641,13 +1616,6 @@ fn handle_tray_menu_event(app: &AppHandle, id: &str) -> Result<(), Box<dyn Error
         }
         Some(TrayMenuAction::ToggleCloseToTray) => {
             let config = toggle_close_to_tray(app)?;
-            if let Err(error) = refresh_shell_state(app, &config) {
-                eprintln!("failed to refresh desktop shell state after tray toggle: {error}");
-            }
-            let _ = app.emit("config-changed", &config);
-        }
-        Some(TrayMenuAction::ToggleAutostart) => {
-            let config = toggle_autostart(app)?;
             if let Err(error) = refresh_shell_state(app, &config) {
                 eprintln!("failed to refresh desktop shell state after tray toggle: {error}");
             }
@@ -2700,26 +2668,6 @@ fn sync_autostart_to_config(app: &AppHandle) {
 fn sync_autostart_to_config(_app: &AppHandle) {}
 
 #[cfg(desktop)]
-fn autostart_enabled(app: &AppHandle, fallback: bool) -> bool {
-    app.autolaunch().is_enabled().unwrap_or(fallback)
-}
-
-#[cfg(not(desktop))]
-fn autostart_enabled(_app: &AppHandle, fallback: bool) -> bool {
-    fallback
-}
-
-fn toggle_autostart(app: &AppHandle) -> Result<AppConfig, Box<dyn Error>> {
-    let store = default_store()?;
-    let mut config = store.load_config()?;
-    let next_enabled = !config.autostart;
-    apply_autostart(app, next_enabled)?;
-    config.autostart = next_enabled;
-    store.save_config(config.clone())?;
-    Ok(config)
-}
-
-#[cfg(desktop)]
 fn apply_autostart(app: &AppHandle, enabled: bool) -> Result<(), Box<dyn Error>> {
     let manager = app.autolaunch();
     if enabled {
@@ -2786,10 +2734,6 @@ mod tests {
             tray_menu_action("toggle-close-to-tray"),
             Some(TrayMenuAction::ToggleCloseToTray)
         );
-        assert_eq!(
-            tray_menu_action("toggle-autostart"),
-            Some(TrayMenuAction::ToggleAutostart)
-        );
         assert_eq!(tray_menu_action("quit"), Some(TrayMenuAction::Quit));
         assert_eq!(tray_menu_action("unknown"), None);
     }
@@ -2805,21 +2749,14 @@ mod tests {
 
     #[test]
     fn builds_tray_menu_specs_with_configured_checked_state() {
-        let specs = tray_menu_specs(Locale::ZhCn, true, false);
+        let specs = tray_menu_specs(Locale::ZhCn, true);
         let ids: Vec<_> = specs.iter().map(|spec| spec.id).collect();
 
         assert_eq!(
             ids,
-            vec![
-                "show-main",
-                "quick-note",
-                "toggle-close-to-tray",
-                "toggle-autostart",
-                "quit"
-            ]
+            vec!["show-main", "quick-note", "toggle-close-to-tray", "quit"]
         );
         assert_eq!(specs[2].checked, Some(true));
-        assert_eq!(specs[3].checked, Some(false));
     }
 
     #[test]

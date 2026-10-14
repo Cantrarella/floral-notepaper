@@ -72,14 +72,6 @@ pub fn tray_toggle_close_to_tray_label(locale: Locale) -> &'static str {
     }
 }
 
-pub fn tray_toggle_autostart_label(locale: Locale) -> &'static str {
-    match locale {
-        Locale::ZhCn => "开机自启动",
-        Locale::EnUs => "Launch on Startup",
-        Locale::ZhHk => "開機自啟",
-    }
-}
-
 pub fn tray_quit_label(locale: Locale) -> &'static str {
     match locale {
         Locale::ZhCn => "退出",
@@ -279,7 +271,6 @@ mod tests {
             tray_toggle_close_to_tray_label(Locale::EnUs),
             "Close to Tray"
         );
-        assert_eq!(tray_toggle_autostart_label(Locale::ZhHk), "開機自啟");
         assert_eq!(tray_quit_label(Locale::EnUs), "Quit");
     }
 

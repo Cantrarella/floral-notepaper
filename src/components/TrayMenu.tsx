@@ -119,7 +119,7 @@ export function TrayMenu() {
       <div
         role="menu"
         aria-orientation="vertical"
-        className="flex w-[190px] flex-col rounded-[8px] bg-paper py-[6px] ring-1 ring-black/5"
+        className="flex w-[150px] flex-col rounded-[8px] bg-paper py-[6px] ring-1 ring-black/5"
       >
         {entries.map((entry, index) =>
           entry.kind === "separator" ? (
