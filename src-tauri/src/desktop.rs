@@ -437,11 +437,11 @@ const TRAY_MENU_WINDOW_LABEL: &str = "tray-menu";
 const TRAY_MENU_OPENED_EVENT: &str = "tray-menu-opened";
 
 /// 自绘菜单的版面尺寸（逻辑像素），与 `src/components/TrayMenu.tsx` 的
-/// 内边距、行高保持一致：10 + 34×5 + 9 + 10 = 199，宽 224。
+/// 内边距、行高保持一致：6 + 28×5 + 7 + 6 = 159，宽 190。
 #[cfg(not(target_os = "macos"))]
-const TRAY_MENU_WIDTH: f64 = 224.0;
+const TRAY_MENU_WIDTH: f64 = 190.0;
 #[cfg(not(target_os = "macos"))]
-const TRAY_MENU_HEIGHT: f64 = 199.0;
+const TRAY_MENU_HEIGHT: f64 = 159.0;
 /// 菜单因失焦收起后，这个时间窗内忽略新的弹出请求——否则点托盘右键想收起
 /// 菜单时，失焦收起与随后的 WM_RBUTTONUP 会前后脚到达，菜单又弹回来
 #[cfg(not(target_os = "macos"))]

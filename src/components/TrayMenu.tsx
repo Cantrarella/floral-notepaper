@@ -14,8 +14,8 @@ function isSelectable(entry: TrayMenuEntry) {
 function CheckIcon() {
   return (
     <svg
-      width="13"
-      height="13"
+      width="12"
+      height="12"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -119,11 +119,11 @@ export function TrayMenu() {
       <div
         role="menu"
         aria-orientation="vertical"
-        className="flex w-[224px] flex-col rounded-[10px] bg-paper py-[10px] ring-1 ring-black/5"
+        className="flex w-[190px] flex-col rounded-[8px] bg-paper py-[6px] ring-1 ring-black/5"
       >
         {entries.map((entry, index) =>
           entry.kind === "separator" ? (
-            <div key={entry.id} className="my-[4px] h-px bg-paper-deep/60" />
+            <div key={entry.id} className="my-[3px] h-px bg-paper-deep/60" />
           ) : (
             <button
               key={entry.id}
@@ -132,11 +132,11 @@ export function TrayMenu() {
               aria-checked={entry.kind === "check" ? entry.checked : undefined}
               onMouseEnter={() => setActiveIndex(index)}
               onClick={() => void invokeTrayMenuItem(entry.id)}
-              className={`flex h-[34px] w-full shrink-0 cursor-default items-center px-[10px] text-left text-[13px] transition-colors duration-100 ${
+              className={`flex h-[28px] w-full shrink-0 cursor-default items-center px-[10px] text-left text-[12px] transition-colors duration-100 ${
                 entry.kind === "danger" ? "tray-menu-danger" : "text-ink"
               } ${activeIndex === index ? "bg-paper-warm" : "bg-transparent"}`}
             >
-              <span className="mr-[6px] flex w-[20px] shrink-0 items-center justify-center">
+              <span className="mr-[4px] flex w-[16px] shrink-0 items-center justify-center">
                 {entry.kind === "check" && entry.checked ? <CheckIcon /> : null}
               </span>
               <span className="truncate">{entry.label}</span>
